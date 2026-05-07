@@ -1,0 +1,3325 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admisco — Gestion Mini-École</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --navy: #1A3A5C;
+    --navy-light: #2A5080;
+    --navy-dark: #0F2338;
+    --beige: #F5F0E8;
+    --beige-dark: #EBE4D6;
+    --white: #FAFAF8;
+    --green: #2E7D52;
+    --green-light: #EBF5EE;
+    --red: #C0392B;
+    --red-light: #FBECEA;
+    --orange: #E07B2A;
+    --orange-light: #FDF3E8;
+    --text: #1C2B3A;
+    --text-muted: #5A6A7A;
+    --border: #D8D2C8;
+    --shadow: 0 2px 8px rgba(26,58,92,0.10);
+    --shadow-lg: 0 4px 20px rgba(26,58,92,0.14);
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+  html, body { height: 100%; font-family: 'Source Sans 3', sans-serif; font-size: 17px; background: var(--beige); color: var(--text); }
+  #root { height: 100%; }
+  button { font-family: inherit; cursor: pointer; }
+  input, select, textarea { font-family: inherit; font-size: 1rem; }
+  h1, h2, h3 { font-family: 'Lora', serif; }
+  .fa, .fas, .far, .fab { line-height: 1; }
+  button:hover { opacity: 0.88; }
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--navy) !important;
+    box-shadow: 0 0 0 3px rgba(26,58,92,0.15);
+    outline: none;
+  }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--beige); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  @media (max-width: 768px) {
+    .desktop-layout { flex-direction: column !important; }
+    .desktop-layout aside { display: none !important; }
+    .mobile-header { display: block !important; }
+    .desktop-layout main { height: calc(100vh - 54px); }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel">
+
+// ─── COUCHE API ─────────────────────────────────────────────────────────────
+const API_BASE = '';
+let __authToken = localStorage.getItem('admisco_token') || null;
+
+async function api(url, opts = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(opts.headers || {}),
+    ...(__authToken ? { 'Authorization': `Bearer ${__authToken}` } : {})
+  };
+  const res = await fetch(`${API_BASE}/api${url}`, {
+    ...opts,
+    headers,
+    body: opts.body ? JSON.stringify(opts.body) : undefined
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`);
+  return data;
+}
+
+// ─── DONNÉES FICTIVES (fallback si API indisponible) ──────────────────────
+const ELEVES = [
+  { id:1, nom:"Koné", prenom:"Amara", ddn:"12/03/2015", niveau:"CM1", groupe:"Groupe A", parent:"Fatou Koné", tel:"06 12 34 56 78", statut:"actif", paiement:"À jour" },
+  { id:2, nom:"Diallo", prenom:"Yusuf", ddn:"05/07/2014", niveau:"CM2", groupe:"Groupe B", parent:"Ibrahim Diallo", tel:"07 23 45 67 89", statut:"actif", paiement:"Impayé" },
+  { id:3, nom:"Benali", prenom:"Leila", ddn:"22/11/2015", niveau:"CM1", groupe:"Groupe A", parent:"Nadia Benali", tel:"06 34 56 78 90", statut:"actif", paiement:"À jour" },
+  { id:4, nom:"Traoré", prenom:"Moussa", ddn:"08/01/2014", niveau:"CM2", groupe:"Groupe B", parent:"Awa Traoré", tel:"07 45 67 89 01", statut:"actif", paiement:"À jour" },
+  { id:5, nom:"Aziz", prenom:"Sofia", ddn:"30/06/2016", niveau:"CE2", groupe:"Groupe C", parent:"Karim Aziz", tel:"06 56 78 90 12", statut:"actif", paiement:"Impayé" },
+  { id:6, nom:"Mbeki", prenom:"Nathan", ddn:"14/09/2015", niveau:"CM1", groupe:"Groupe A", parent:"Carole Mbeki", tel:"07 67 89 01 23", statut:"archivé", paiement:"À jour" },
+];
+
+const COURS = [
+  { id:1, matiere:"Mathématiques", groupe:"Groupe A", enseignant:"M. Bernard", jour:"Lundi", heure:"14h00", salle:"Salle 1", duree:"1h30" },
+  { id:2, matiere:"Français", groupe:"Groupe B", enseignant:"Mme Dupont", jour:"Mardi", heure:"15h00", salle:"Salle 2", duree:"1h30" },
+  { id:3, matiere:"Mathématiques", groupe:"Groupe B", enseignant:"M. Bernard", jour:"Jeudi", heure:"14h00", salle:"Salle 1", duree:"1h30" },
+  { id:4, matiere:"Français", groupe:"Groupe A", enseignant:"Mme Dupont", jour:"Vendredi", heure:"14h30", salle:"Salle 2", duree:"1h30" },
+  { id:5, matiere:"Anglais", groupe:"Groupe C", enseignant:"Mme Martin", jour:"Mercredi", heure:"10h00", salle:"Salle 3", duree:"1h00" },
+];
+
+const PRESENCES_SEANCE = [
+  { id:1, eleveId:1, nom:"Amara Koné", statut:"present" },
+  { id:2, eleveId:2, nom:"Yusuf Diallo", statut:"absent" },
+  { id:3, eleveId:3, nom:"Leila Benali", statut:"present" },
+  { id:4, eleveId:4, nom:"Moussa Traoré", statut:"retard" },
+];
+
+const PAIEMENTS = [
+  { id:1, eleveId:1, eleve:"Amara Koné", montant:60, date:"01/04/2026", mode:"Espèces", formule:"Mensuel", statut:"payé" },
+  { id:2, eleveId:2, eleve:"Yusuf Diallo", montant:60, date:"—", mode:"—", formule:"Mensuel", statut:"impayé" },
+  { id:3, eleveId:3, eleve:"Leila Benali", montant:60, date:"28/03/2026", mode:"Virement", formule:"Mensuel", statut:"payé" },
+  { id:4, eleveId:4, eleve:"Moussa Traoré", montant:60, date:"02/04/2026", mode:"Espèces", formule:"Mensuel", statut:"payé" },
+  { id:5, eleveId:5, eleve:"Sofia Aziz", montant:60, date:"—", mode:"—", formule:"Mensuel", statut:"impayé" },
+];
+
+const GROUPES = [
+  { id:1, nom:"Groupe A", niveau:"CM1", eleves:3, description:"Cours du lundi et vendredi" },
+  { id:2, nom:"Groupe B", niveau:"CM2", eleves:2, description:"Cours du mardi et jeudi" },
+  { id:3, nom:"Groupe C", niveau:"CE2", eleves:1, description:"Cours du mercredi" },
+];
+
+// ─── COMPOSANT ICÔNE ────────────────────────────────────────────────────────
+function Icon({ name, style: extraStyle, className }) {
+  return <i className={`fa-solid fa-${name}`} style={{ lineHeight:1, ...extraStyle }} aria-hidden="true"></i>;
+}
+
+// ─── STYLES COMMUNS ────────────────────────────────────────────────────────
+const appStyles = {
+  wrap: { display:"flex", height:"100vh", overflow:"hidden" },
+  sidebar: {
+    width:240, background:"var(--navy)", display:"flex", flexDirection:"column",
+    padding:"0", flexShrink:0, overflowY:"auto"
+  },
+  sidebarLogo: { padding:"28px 24px 20px", borderBottom:"1px solid rgba(255,255,255,0.12)" },
+  sidebarLogoTitle: { fontFamily:"Lora, serif", color:"#fff", fontSize:"1.25rem", fontWeight:700, lineHeight:1.2 },
+  sidebarLogoSub: { color:"rgba(255,255,255,0.55)", fontSize:"0.82rem", marginTop:4 },
+  sidebarNav: { flex:1, padding:"16px 0" },
+  navItem: (active) => ({
+    display:"flex", alignItems:"center", gap:12, padding:"13px 24px",
+    background: active ? "rgba(255,255,255,0.14)" : "transparent",
+    borderLeft: active ? "3px solid #fff" : "3px solid transparent",
+    cursor:"pointer", color: active ? "#fff" : "rgba(255,255,255,0.72)",
+    fontSize:"0.97rem", fontWeight: active ? 600 : 400, transition:"all 0.15s",
+    border:"none", width:"100%", textAlign:"left",
+  }),
+  navIcon: { width:22, textAlign:"center", fontSize:"1rem", opacity:0.9 },
+  main: { flex:1, display:"flex", flexDirection:"column", overflow:"hidden" },
+  topbar: {
+    background:"var(--white)", borderBottom:"1px solid var(--border)",
+    padding:"16px 28px", display:"flex", alignItems:"center", justifyContent:"space-between",
+    boxShadow:"0 1px 4px rgba(26,58,92,0.06)"
+  },
+  topbarTitle: { fontFamily:"Lora, serif", fontSize:"1.5rem", color:"var(--navy)", fontWeight:700 },
+  topbarUser: { display:"flex", alignItems:"center", gap:10, color:"var(--text-muted)", fontSize:"0.9rem" },
+  content: { flex:1, overflowY:"auto", padding:"28px", background:"var(--beige)" },
+  card: {
+    background:"var(--white)", borderRadius:"var(--radius)", boxShadow:"var(--shadow)",
+    padding:"24px", marginBottom:20
+  },
+  sectionTitle: { fontFamily:"Lora, serif", fontSize:"1.2rem", color:"var(--navy)", marginBottom:16, fontWeight:600 },
+  btnPrimary: {
+    background:"var(--navy)", color:"#fff", border:"none", borderRadius:"var(--radius-sm)",
+    padding:"13px 24px", fontSize:"1rem", fontWeight:600, cursor:"pointer",
+    display:"inline-flex", alignItems:"center", gap:8, transition:"background 0.15s", lineHeight:1,
+  },
+  btnSecondary: {
+    background:"var(--white)", color:"var(--navy)", border:"2px solid var(--navy)",
+    borderRadius:"var(--radius-sm)", padding:"11px 22px", fontSize:"1rem",
+    fontWeight:600, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:8,
+    transition:"all 0.15s", lineHeight:1,
+  },
+  btnSuccess: {
+    background:"var(--green)", color:"#fff", border:"none",
+    borderRadius:"var(--radius-sm)", padding:"13px 24px", fontSize:"1rem",
+    fontWeight:600, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:8,
+  },
+  input: {
+    width:"100%", padding:"13px 16px", border:"2px solid var(--border)",
+    borderRadius:"var(--radius-sm)", fontSize:"1rem", background:"var(--white)",
+    color:"var(--text)", outline:"none", transition:"border-color 0.15s", fontFamily:"inherit",
+  },
+  label: { display:"block", fontWeight:600, marginBottom:6, color:"var(--text)", fontSize:"0.95rem" },
+  badge: (color) => ({
+    display:"inline-flex", alignItems:"center", gap:5, padding:"3px 10px", borderRadius:20,
+    fontSize:"0.82rem", fontWeight:600,
+    ...(color==="green"  ? { background:"var(--green-light)", color:"var(--green)" } :
+        color==="red"    ? { background:"var(--red-light)", color:"var(--red)" } :
+        color==="orange" ? { background:"var(--orange-light)", color:"var(--orange)" } :
+                           { background:"var(--beige-dark)", color:"var(--text-muted)" })
+  }),
+  table: { width:"100%", borderCollapse:"collapse" },
+  th: { textAlign:"left", padding:"11px 14px", background:"var(--beige)", color:"var(--navy)", fontWeight:700, fontSize:"0.9rem", borderBottom:"2px solid var(--border)" },
+  td: { padding:"12px 14px", borderBottom:"1px solid var(--border)", fontSize:"0.97rem", verticalAlign:"middle" },
+};
+
+// ─── COMPOSANTS COMMUNS ────────────────────────────────────────────────────
+
+function PageHeader({ title, action }) {
+  return (
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:24, flexWrap:"wrap", gap:12 }}>
+      <h2 style={{ fontFamily:"Lora, serif", fontSize:"1.5rem", color:"var(--navy)", fontWeight:700 }}>{title}</h2>
+      {action}
+    </div>
+  );
+}
+
+function StatCard({ icon, label, value, color="navy" }) {
+  const colors = {
+    navy:   { bg:"var(--navy)",   text:"#fff" },
+    green:  { bg:"var(--green)",  text:"#fff" },
+    orange: { bg:"var(--orange)", text:"#fff" },
+    beige:  { bg:"var(--white)",  text:"var(--navy)" },
+  };
+  const c = colors[color] || colors.navy;
+  return (
+    <div style={{ background:c.bg, color:c.text, borderRadius:"var(--radius)", padding:"22px 24px", boxShadow:"var(--shadow)", display:"flex", flexDirection:"column", gap:8 }}>
+      <i className={`fa-solid fa-${icon}`} style={{ fontSize:"1.6rem", opacity:0.85 }}></i>
+      <div style={{ fontSize:"2rem", fontWeight:700, lineHeight:1 }}>{value}</div>
+      <div style={{ fontSize:"0.9rem", opacity:0.85 }}>{label}</div>
+    </div>
+  );
+}
+
+function AlertBox({ type="info", children }) {
+  const cfg = {
+    info:    { bg:"#E8F0FA", border:"#1A3A5C", color:"#1A3A5C", icon:"circle-info" },
+    success: { bg:"var(--green-light)", border:"var(--green)", color:"var(--green)", icon:"circle-check" },
+    warning: { bg:"var(--orange-light)", border:"var(--orange)", color:"var(--orange)", icon:"triangle-exclamation" },
+    error:   { bg:"var(--red-light)", border:"var(--red)", color:"var(--red)", icon:"circle-xmark" },
+  }[type];
+  return (
+    <div style={{ background:cfg.bg, border:`2px solid ${cfg.border}`, borderRadius:"var(--radius-sm)", padding:"14px 18px", display:"flex", gap:12, alignItems:"flex-start", marginBottom:16 }}>
+      <i className={`fa-solid fa-${cfg.icon}`} style={{ color:cfg.color, fontSize:"1.1rem", marginTop:2, flexShrink:0 }}></i>
+      <span style={{ color:cfg.color, fontSize:"0.97rem", lineHeight:1.5 }}>{children}</span>
+    </div>
+  );
+}
+
+function SearchBar({ value, onChange, placeholder }) {
+  return (
+    <div style={{ position:"relative", marginBottom:20 }}>
+      <i className="fa-solid fa-magnifying-glass" style={{ position:"absolute", left:14, top:"50%", transform:"translateY(-50%)", color:"var(--text-muted)", pointerEvents:"none" }}></i>
+      <input style={{ ...appStyles.input, paddingLeft:42 }} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder||"Rechercher..."} />
+    </div>
+  );
+}
+
+function Modal({ title, onClose, children }) {
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}
+         onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
+      <div style={{ background:"var(--white)", borderRadius:"var(--radius)", boxShadow:"var(--shadow-lg)", width:"100%", maxWidth:520, maxHeight:"90vh", overflowY:"auto" }}>
+        <div style={{ padding:"20px 24px", borderBottom:"1px solid var(--border)", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <h3 style={{ fontFamily:"Lora, serif", fontSize:"1.2rem", color:"var(--navy)" }}>{title}</h3>
+          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:"1.4rem", cursor:"pointer", color:"var(--text-muted)", lineHeight:1, padding:"4px 8px" }}>
+            <i className="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div style={{ padding:"24px" }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function FormField({ label, required, error, children, hint }) {
+  return (
+    <div style={{ marginBottom:18 }}>
+      <label style={appStyles.label}>
+        {label}{required && <span style={{ color:"var(--red)", marginLeft:4 }}>*</span>}
+      </label>
+      {children}
+      {hint && !error && <div style={{ fontSize:"0.84rem", color:"var(--text-muted)", marginTop:4 }}>{hint}</div>}
+      {error && (
+        <div style={{ fontSize:"0.84rem", color:"var(--red)", marginTop:4, display:"flex", gap:6, alignItems:"center" }}>
+          <i className="fa-solid fa-triangle-exclamation"></i>{error}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── CONNEXION ─────────────────────────────────────────────────────────────
+function LoginScreen({ onLogin }) {
+  const [email, setEmail] = React.useState("admin@mini-ecole.fr");
+  const [pwd, setPwd] = React.useState("");
+  const [err, setErr] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+
+  const handle = async () => {
+    if (!email.trim()) { setErr("Veuillez saisir votre identifiant."); return; }
+    if (!pwd.trim()) { setErr("Veuillez saisir votre mot de passe."); return; }
+    setLoading(true); setErr("");
+    try {
+      const data = await api('/auth/login', { method: 'POST', body: { email, password: pwd } });
+      __authToken = data.token;
+      localStorage.setItem('admisco_token', data.token);
+      onLogin(data.user);
+    } catch (e) {
+      setErr(e.message || "Identifiants invalides.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ minHeight:"100vh", background:"var(--beige)", display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+      <div style={{ width:"100%", maxWidth:440 }}>
+        <div style={{ textAlign:"center", marginBottom:32 }}>
+          <div style={{ width:72, height:72, background:"var(--navy)", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 16px" }}>
+            <i className="fa-solid fa-school" style={{ fontSize:"2rem", color:"#fff" }}></i>
+          </div>
+          <h1 style={{ fontFamily:"Lora, serif", color:"var(--navy)", fontSize:"2rem", fontWeight:700 }}>Admisco</h1>
+          <p style={{ color:"var(--text-muted)", marginTop:6, fontSize:"1rem" }}>Gestion de la mini-école</p>
+        </div>
+        <div style={{ ...appStyles.card, padding:32 }}>
+          <h2 style={{ fontFamily:"Lora, serif", color:"var(--navy)", marginBottom:24, fontSize:"1.3rem" }}>Connexion</h2>
+          {err && <AlertBox type="error">{err}</AlertBox>}
+          <FormField label="Votre identifiant" required>
+            <input style={appStyles.input} value={email} onChange={e=>{ setEmail(e.target.value); setErr(""); }}
+                   placeholder="ex : admin@mini-ecole.fr" onKeyDown={e=>e.key==="Enter"&&handle()} />
+          </FormField>
+          <FormField label="Votre mot de passe" required>
+            <input style={appStyles.input} type="password" value={pwd} onChange={e=>{ setPwd(e.target.value); setErr(""); }}
+                   placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&handle()} />
+          </FormField>
+          <button style={{ ...appStyles.btnPrimary, width:"100%", justifyContent:"center", marginTop:8, padding:"15px 24px", fontSize:"1.1rem" }}
+                  onClick={handle} disabled={loading}>
+            {loading
+              ? <><i className="fa-solid fa-spinner fa-spin"></i> Connexion en cours…</>
+              : <><i className="fa-solid fa-arrow-right-to-bracket"></i> Se connecter</>}
+          </button>
+          <p style={{ textAlign:"center", marginTop:16, color:"var(--text-muted)", fontSize:"0.88rem" }}>
+            Mot de passe oublié ? Contactez le responsable de l'association.
+          </p>
+        </div>
+        <p style={{ textAlign:"center", color:"var(--text-muted)", fontSize:"0.82rem", marginTop:20 }}>
+          <em>Compte démo : admin@mini-ecole.fr / admin123</em>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── DASHBOARD ─────────────────────────────────────────────────────────────
+function Dashboard({ onNav }) {
+  const [stats, setStats] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    api('/dashboard').then(d => { setStats(d); setLoading(false); }).catch(() => setLoading(false));
+  }, []);
+
+  const modules = [
+    { key:"eleves",        icon:"user-graduate", label:"Élèves",      desc:"Fiches, inscriptions, historique" },
+    { key:"groupes",       icon:"users",          label:"Groupes",     desc:"Organisation par niveau" },
+    { key:"cours",         icon:"book-open",      label:"Cours",       desc:"Planning et séances" },
+    { key:"presences",     icon:"clipboard-check",label:"Présences",   desc:"Marquer les présences du jour" },
+    { key:"finances",      icon:"euro-sign",      label:"Paiements",   desc:"Cotisations et suivi impayés" },
+    { key:"bulletins",     icon:"file-lines",     label:"Bulletins",   desc:"Notes et appréciations" },
+  ];
+
+  return (
+    <div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:16, marginBottom:28 }}>
+        <StatCard icon="user-graduate" label="Élèves inscrits"          value={stats?.nbEleves ?? '—'} color="navy" />
+        <StatCard icon="clipboard-check" label="Présences aujourd'hui"  value={stats?.nbEleves ? Math.round(stats.nbEleves * 0.75) : '—'} color="green" />
+        <StatCard icon="triangle-exclamation" label="Alertes absences" value={stats?.alertesAbsences ?? '—'} color="orange" />
+        <StatCard icon="book-open" label="Cours actifs"                 value={stats?.nbCours ?? '—'}  color="beige" />
+      </div>
+
+      {stats?.alertesAbsences > 0 && (
+        <AlertBox type="warning">
+          <strong>{stats.alertesAbsences} élève{stats.alertesAbsences>1?'s':''} avec des absences répétées.</strong> Consultez le module Présences pour plus de détails.
+        </AlertBox>
+      )}
+
+      <h2 style={{ fontFamily:"Lora, serif", fontSize:"1.15rem", color:"var(--navy)", marginBottom:16, fontWeight:700 }}>Que voulez-vous faire ?</h2>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:14, marginBottom:32 }}>
+        {modules.map(m => (
+          <button key={m.key} onClick={()=>onNav(m.key)}
+            style={{ background:"var(--white)", border:"2px solid var(--border)", borderRadius:"var(--radius)", padding:"22px 20px", cursor:"pointer", textAlign:"left", transition:"all 0.15s", display:"block" }}
+            onMouseEnter={e=>{ e.currentTarget.style.borderColor="var(--navy)"; e.currentTarget.style.boxShadow="var(--shadow-lg)"; }}
+            onMouseLeave={e=>{ e.currentTarget.style.borderColor="var(--border)"; e.currentTarget.style.boxShadow="none"; }}>
+            <div style={{ width:44, height:44, background:"var(--beige-dark)", borderRadius:"var(--radius-sm)", display:"flex", alignItems:"center", justifyContent:"center", marginBottom:12 }}>
+              <i className={`fa-solid fa-${m.icon}`} style={{ fontSize:"1.2rem", color:"var(--navy)" }}></i>
+            </div>
+            <div style={{ fontFamily:"Lora, serif", fontSize:"1.05rem", fontWeight:700, color:"var(--navy)", marginBottom:4 }}>{m.label}</div>
+            <div style={{ fontSize:"0.88rem", color:"var(--text-muted)", lineHeight:1.4 }}>{m.desc}</div>
+          </button>
+        ))}
+      </div>
+
+      <h2 style={{ fontFamily:"Lora, serif", fontSize:"1.15rem", color:"var(--navy)", marginBottom:14, fontWeight:700 }}>Prochains cours</h2>
+      <div style={{ ...appStyles.card, padding:0, overflow:"hidden" }}>
+        {COURS.slice(0,3).map((c,i) => (
+          <div key={c.id} style={{ display:"flex", alignItems:"center", gap:16, padding:"16px 20px", borderBottom: i<2 ? "1px solid var(--border)" : "none" }}>
+            <div style={{ background:"var(--beige)", borderRadius:"var(--radius-sm)", padding:"10px 14px", textAlign:"center", minWidth:64 }}>
+              <div style={{ fontWeight:700, color:"var(--navy)", fontSize:"0.9rem" }}>{c.jour}</div>
+              <div style={{ color:"var(--text-muted)", fontSize:"0.85rem" }}>{c.heure}</div>
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontWeight:700, color:"var(--text)" }}>{c.matiere} — {c.groupe}</div>
+              <div style={{ color:"var(--text-muted)", fontSize:"0.88rem" }}>{c.enseignant} · {c.salle}</div>
+            </div>
+            <button style={{ ...appStyles.btnPrimary, padding:"9px 16px", fontSize:"0.9rem" }} onClick={()=>onNav("presences")}>
+              <i className="fa-solid fa-clipboard-check"></i> Présences
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── HELPERS ───────────────────────────────────────────────────────────────
+function parseDateFR(dd) {
+  if (!dd) return null;
+  let m = dd.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) m = dd.match(/^(\d{2})(\d{2})(\d{4})$/);
+  if (!m) return null;
+  return `${m[3]}-${m[2]}-${m[1]}`;
+}
+function formatDateFR(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso + 'T00:00:00');
+  if (isNaN(d)) return iso;
+  return d.toLocaleDateString('fr-FR');
+}
+function formatDateInput(raw) {
+  const digits = raw.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return digits.slice(0,2) + '/' + digits.slice(2);
+  return digits.slice(0,2) + '/' + digits.slice(2,4) + '/' + digits.slice(4);
+}
+
+// ─── ÉLÈVES ────────────────────────────────────────────────────────────────
+function ElevesScreen({ user }) {
+  const [search, setSearch] = React.useState("");
+  const [eleves, setEleves] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [modal, setModal] = React.useState(null);
+  const [form, setForm] = React.useState({});
+  const [errors, setErrors] = React.useState({});
+  const [fiche, setFiche] = React.useState(null);
+  const [confirmDelete, setConfirmDelete] = React.useState(null);
+  const canEdit = user && (user.role === 'admin' || user.role === 'secretaire');
+  const canDelete = user && (user.role === 'admin' || user.role === 'secretaire');
+
+  React.useEffect(() => {
+    setLoading(true);
+    api('/eleves?statut=actif')
+      .then(data => {
+        const mapped = (Array.isArray(data) ? data : []).map(e => ({
+          id: e.id,
+          nom: e.nom,
+          prenom: e.prenom,
+          ddn: formatDateFR(e.date_naissance),
+          niveau: e.niveau_scolaire || '—',
+          groupe: '—',
+          parent: e.contact_parent_nom || '—',
+          tel: e.contact_parent_telephone || '—',
+          statut: e.statut,
+          paiement: 'À jour'
+        }));
+        setEleves(mapped);
+      })
+      .catch(() => setEleves(ELEVES))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = eleves.filter(e =>
+    e.statut !== "archivé" &&
+    (e.nom + " " + e.prenom + " " + e.groupe + " " + e.niveau).toLowerCase().includes(search.toLowerCase())
+  );
+
+  const validate = () => {
+    const err = {};
+    if (!form.nom?.trim())    err.nom    = "Ce champ est obligatoire. Saisissez le nom de l'élève.";
+    if (!form.prenom?.trim()) err.prenom = "Ce champ est obligatoire. Saisissez le prénom de l'élève.";
+    if (!form.niveau)         err.niveau = "Choisissez un niveau scolaire.";
+    if (!form.parent?.trim()) err.parent = "Le nom du parent ou tuteur est obligatoire.";
+    if (form.ddn && !parseDateFR(form.ddn)) err.ddn = "Format attendu : JJ/MM/AAAA.";
+    return err;
+  };
+
+  const handleSave = async () => {
+    const err = validate();
+    if (Object.keys(err).length > 0) { setErrors(err); return; }
+
+    const payload = {
+      nom: form.nom, prenom: form.prenom,
+      date_naissance: parseDateFR(form.ddn) || null,
+      niveau_scolaire: form.niveau,
+      contact_parent_nom: form.parent,
+      contact_parent_telephone: form.tel || null,
+    };
+
+    if (modal === "add") {
+      try {
+        const created = await api('/eleves', { method: 'POST', body: { ...payload, statut: 'actif' } });
+        setEleves(prev => [...prev, { id: created.id, nom: created.nom, prenom: created.prenom, ddn: formatDateFR(created.date_naissance), niveau: created.niveau_scolaire || '—', groupe: '—', parent: created.contact_parent_nom || '—', tel: created.contact_parent_telephone || '—', statut: created.statut, paiement: 'À jour' }]);
+      } catch (e) {
+        setEleves(prev => [...prev, { id: Date.now(), statut:"actif", paiement:"À jour", groupe:"—", ...form, ddn: form.ddn || '—' }]);
+      }
+    } else if (modal === "edit") {
+      try {
+        const updated = await api(`/eleves/${form.id}`, { method: 'PUT', body: payload });
+        setEleves(prev => prev.map(e => e.id === updated.id ? { ...e, nom: updated.nom, prenom: updated.prenom, ddn: formatDateFR(updated.date_naissance), niveau: updated.niveau_scolaire || '—', parent: updated.contact_parent_nom || '—', tel: updated.contact_parent_telephone || '—' } : e));
+      } catch (e) {
+        setEleves(prev => prev.map(e => e.id === form.id ? { ...e, ...form, ddn: form.ddn || '—' } : e));
+      }
+    }
+    setModal(null); setForm({}); setErrors({});
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await api(`/eleves/${id}`, { method: 'DELETE' });
+      setEleves(prev => prev.filter(e => e.id !== id));
+    } catch (e) {
+      alert(e.message || "Impossible d'archiver cet élève.");
+    }
+    setConfirmDelete(null);
+  };
+
+  if (fiche) return <FicheEleve eleve={fiche} onBack={()=>setFiche(null)} user={user} onUpdate={(updated)=>{ setEleves(prev=>prev.map(e=>e.id===updated.id?{...e,nom:updated.nom,prenom:updated.prenom,ddn:formatDateFR(updated.date_naissance),niveau:updated.niveau_scolaire||'—',parent:updated.contact_parent_nom||'—',tel:updated.contact_parent_telephone||'—'}:e)); }} onDelete={(id)=>{ setEleves(prev=>prev.filter(e=>e.id!==id)); }} />;
+
+  return (
+    <div>
+      <PageHeader title={`Élèves inscrits (${filtered.length})`}
+        action={
+          <button style={appStyles.btnPrimary} onClick={()=>{ setForm({}); setErrors({}); setModal("add"); }}>
+            <i className="fa-solid fa-plus"></i> Ajouter un élève
+          </button>
+        } />
+      <SearchBar value={search} onChange={setSearch} placeholder="Rechercher par nom, groupe, niveau…" />
+
+      {filtered.length === 0 && (
+        <AlertBox type="info">Aucun élève ne correspond à votre recherche. Essayez un autre terme.</AlertBox>
+      )}
+
+      <div style={{ ...appStyles.card, padding:0, overflowX:"auto" }}>
+        <table style={appStyles.table}>
+          <thead>
+            <tr>
+              <th style={appStyles.th}>Élève</th>
+              <th style={appStyles.th}>Niveau</th>
+              <th style={appStyles.th}>Groupe</th>
+              <th style={appStyles.th}>Parent / Tuteur</th>
+              <th style={appStyles.th}>Paiement</th>
+              <th style={appStyles.th}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(e => (
+              <tr key={e.id}
+                  onMouseEnter={ev=>ev.currentTarget.style.background="var(--beige)"}
+                  onMouseLeave={ev=>ev.currentTarget.style.background="var(--white)"}>
+                <td style={appStyles.td}>
+                  <div style={{ fontWeight:700 }}>{e.prenom} {e.nom}</div>
+                  <div style={{ color:"var(--text-muted)", fontSize:"0.85rem" }}>Né(e) le {e.ddn}</div>
+                </td>
+                <td style={appStyles.td}>{e.niveau}</td>
+                <td style={appStyles.td}>{e.groupe}</td>
+                <td style={appStyles.td}>
+                  <div>{e.parent}</div>
+                  <div style={{ color:"var(--text-muted)", fontSize:"0.85rem" }}>{e.tel}</div>
+                </td>
+                <td style={appStyles.td}>
+                  <span style={appStyles.badge(e.paiement==="À jour"?"green":"red")}>
+                    <i className={`fa-solid fa-${e.paiement==="À jour"?"circle-check":"circle-exclamation"}`}></i>
+                    {e.paiement}
+                  </span>
+                </td>
+                <td style={appStyles.td}>
+                  <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                    <button style={{ ...appStyles.btnSecondary, padding:"7px 14px", fontSize:"0.88rem" }} onClick={()=>setFiche(e)}>
+                      <i className="fa-solid fa-eye"></i> Voir
+                    </button>
+                    {canEdit && (
+                      <button style={{ ...appStyles.btnSecondary, padding:"7px 14px", fontSize:"0.88rem" }} onClick={()=>{ setForm({...e}); setErrors({}); setModal("edit"); }}>
+                        <i className="fa-solid fa-pen"></i> Modifier
+                      </button>
+                    )}
+                    {canDelete && (
+                      <button style={{ padding:"7px 14px", fontSize:"0.88rem", borderRadius:"var(--radius-sm)", border:"2px solid var(--red)", background:"var(--white)", color:"var(--red)", fontWeight:600, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:6 }} onClick={()=>setConfirmDelete(e)}>
+                        <i className="fa-solid fa-trash"></i> Supprimer
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {modal && (
+        <Modal title={modal==="add" ? "Ajouter un nouvel élève" : "Modifier la fiche élève"} onClose={()=>{ setModal(null); setForm({}); setErrors({}); }}>
+          <FormField label="Nom de famille" required error={errors.nom}>
+            <input style={{ ...appStyles.input, borderColor: errors.nom ? "var(--red)" : "var(--border)" }}
+                   value={form.nom||""} onChange={e=>{ setForm(p=>({...p,nom:e.target.value})); setErrors(p=>({...p,nom:""})); }}
+                   placeholder="ex : Koné" />
+          </FormField>
+          <FormField label="Prénom" required error={errors.prenom}>
+            <input style={{ ...appStyles.input, borderColor: errors.prenom ? "var(--red)" : "var(--border)" }}
+                   value={form.prenom||""} onChange={e=>{ setForm(p=>({...p,prenom:e.target.value})); setErrors(p=>({...p,prenom:""})); }}
+                   placeholder="ex : Amara" />
+          </FormField>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+            <FormField label="Date de naissance" error={errors.ddn}>
+              <input style={{ ...appStyles.input, borderColor: errors.ddn ? "var(--red)" : "var(--border)" }} value={form.ddn||""} onChange={e=>{ const v = formatDateInput(e.target.value); setForm(p=>({...p,ddn:v})); setErrors(p=>({...p,ddn:""})); }} placeholder="JJ/MM/AAAA" />
+            </FormField>
+            <FormField label="Niveau scolaire" required error={errors.niveau}>
+              <select style={{ ...appStyles.input, borderColor: errors.niveau ? "var(--red)" : "var(--border)" }}
+                      value={form.niveau||""} onChange={e=>{ setForm(p=>({...p,niveau:e.target.value})); setErrors(p=>({...p,niveau:""})); }}>
+                <option value="">— Choisir —</option>
+                {["CE1","CE2","CM1","CM2","6e","5e","4e","3e"].map(n=><option key={n} value={n}>{n}</option>)}
+              </select>
+            </FormField>
+          </div>
+          <FormField label="Groupe assigné">
+            <select style={appStyles.input} value={form.groupe||""} onChange={e=>setForm(p=>({...p,groupe:e.target.value}))}>
+              <option value="">— Pas encore assigné —</option>
+              {GROUPES.map(g=><option key={g.id} value={g.nom}>{g.nom} ({g.niveau})</option>)}
+            </select>
+          </FormField>
+          <FormField label="Nom du parent / tuteur" required error={errors.parent}>
+            <input style={{ ...appStyles.input, borderColor: errors.parent ? "var(--red)" : "var(--border)" }}
+                   value={form.parent||""} onChange={e=>{ setForm(p=>({...p,parent:e.target.value})); setErrors(p=>({...p,parent:""})); }}
+                   placeholder="ex : Fatou Koné" />
+          </FormField>
+          <FormField label="Numéro de téléphone" hint="Ce numéro sera utilisé pour vous contacter en cas de besoin.">
+            <input style={appStyles.input} type="tel" value={form.tel||""} onChange={e=>setForm(p=>({...p,tel:e.target.value}))} placeholder="ex : 06 12 34 56 78" />
+          </FormField>
+          <div style={{ display:"flex", gap:12, marginTop:8, justifyContent:"flex-end" }}>
+            <button style={appStyles.btnSecondary} onClick={()=>{ setModal(null); setForm({}); setErrors({}); }}>Annuler</button>
+            <button style={appStyles.btnPrimary} onClick={handleSave}><i className="fa-solid fa-floppy-disk"></i> Enregistrer</button>
+          </div>
+        </Modal>
+      )}
+
+      {confirmDelete && (
+        <Modal title="Confirmer la suppression" onClose={()=>setConfirmDelete(null)}>
+          <AlertBox type="warning">
+            Voulez-vous vraiment archiver la fiche de <strong>{confirmDelete.prenom} {confirmDelete.nom}</strong> ?<br />
+            Cette action est réversible depuis la base de données.
+          </AlertBox>
+          <div style={{ display:"flex", gap:12, marginTop:8, justifyContent:"flex-end" }}>
+            <button style={appStyles.btnSecondary} onClick={()=>setConfirmDelete(null)}>Annuler</button>
+            <button style={{ ...appStyles.btnPrimary, background:"var(--red)" }} onClick={()=>handleDelete(confirmDelete.id)}>
+              <i className="fa-solid fa-trash"></i> Confirmer la suppression
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function FicheEleve({ eleve: initialEleve, onBack, user, onUpdate, onDelete }) {
+  const [loading, setLoading] = React.useState(true);
+  const [eleve, setEleve] = React.useState(null);
+  const [presences, setPresences] = React.useState([]);
+  const [paiements, setPaiements] = React.useState([]);
+  const [notes, setNotes] = React.useState([]);
+  const [stats, setStats] = React.useState(null);
+  const [editMode, setEditMode] = React.useState(false);
+  const [form, setForm] = React.useState({});
+  const [errors, setErrors] = React.useState({});
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [saved, setSaved] = React.useState(false);
+  const canEdit = user && (user.role === 'admin' || user.role === 'secretaire');
+  const canDelete = user && (user.role === 'admin' || user.role === 'secretaire');
+
+  React.useEffect(() => {
+    loadData();
+  }, [initialEleve.id]);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [eleveData, statsData, presData, paieData, notesData] = await Promise.all([
+        api(`/eleves/${initialEleve.id}`),
+        api(`/eleves/${initialEleve.id}/stats`),
+        api(`/presences?eleve_id=${initialEleve.id}`),
+        api(`/paiements?eleve_id=${initialEleve.id}`),
+        api(`/notes?eleve_id=${initialEleve.id}`)
+      ]);
+      setEleve(eleveData);
+      setStats(statsData);
+      setPresences(Array.isArray(presData) ? presData : []);
+      setPaiements(Array.isArray(paieData) ? paieData : []);
+      setNotes(Array.isArray(notesData) ? notesData : []);
+    } catch (e) {
+      setEleve({
+        id: initialEleve.id, nom: initialEleve.nom, prenom: initialEleve.prenom,
+        date_naissance: initialEleve.ddn, niveau_scolaire: initialEleve.niveau,
+        contact_parent_nom: initialEleve.parent, contact_parent_telephone: initialEleve.tel,
+        statut: initialEleve.statut
+      });
+      setPresences([]); setPaiements([]); setNotes([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startEdit = () => {
+    setForm({
+      nom: eleve.nom, prenom: eleve.prenom,
+      ddn: formatDateFR(eleve.date_naissance),
+      niveau: eleve.niveau_scolaire || '',
+      parent: eleve.contact_parent_nom || '',
+      tel: eleve.contact_parent_telephone || ''
+    });
+    setErrors({});
+    setEditMode(true);
+  };
+
+  const validate = () => {
+    const err = {};
+    if (!form.nom?.trim()) err.nom = "Ce champ est obligatoire.";
+    if (!form.prenom?.trim()) err.prenom = "Ce champ est obligatoire.";
+    if (!form.niveau) err.niveau = "Choisissez un niveau scolaire.";
+    if (form.ddn && !parseDateFR(form.ddn)) err.ddn = "Format attendu : JJ/MM/AAAA.";
+    return err;
+  };
+
+  const handleSave = async () => {
+    const err = validate();
+    if (Object.keys(err).length > 0) { setErrors(err); return; }
+    try {
+      const updated = await api(`/eleves/${eleve.id}`, { method: 'PUT', body: {
+        nom: form.nom, prenom: form.prenom,
+        date_naissance: parseDateFR(form.ddn) || null,
+        niveau_scolaire: form.niveau,
+        contact_parent_nom: form.parent,
+        contact_parent_telephone: form.tel || null
+      }});
+      setEleve(updated);
+      setEditMode(false);
+      setSaved(true);
+      setTimeout(()=>setSaved(false), 3000);
+      if (onUpdate) onUpdate(updated);
+    } catch (e) {
+      alert(e.message || "Erreur lors de la sauvegarde.");
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await api(`/eleves/${eleve.id}`, { method: 'DELETE' });
+      if (onDelete) onDelete(eleve.id);
+      onBack();
+    } catch (e) {
+      alert(e.message || "Impossible d'archiver cet élève.");
+    }
+    setConfirmDelete(false);
+  };
+
+  if (loading) {
+    return (
+      <div style={{ textAlign:'center', padding:40 }}>
+        <i className="fa-solid fa-spinner fa-spin" style={{ fontSize:'2rem', color:'var(--navy)' }}></i>
+        <p style={{ marginTop:12, color:'var(--text-muted)' }}>Chargement de la fiche…</p>
+      </div>
+    );
+  }
+
+  const statutPresences = {};
+  (stats?.presences || []).forEach(p => { statutPresences[p.statut] = p.count; });
+  const totalPresences = Object.values(statutPresences).reduce((a,b)=>a+b,0);
+  const tauxPresence = totalPresences > 0 ? Math.round(((statutPresences.present||0)+(statutPresences.retard||0))/totalPresences*100) : 0;
+  const totalPaiements = stats?.paiements?.total || 0;
+
+  const statutLabel = (s) => ({ present:'Présent', absent:'Absent', retard:'En retard', absent_justifie:'Absent justifié' }[s] || s);
+  const statutColor = (s) => s==='present'?'green':(s==='absent_justifie'?'orange':(s==='retard'?'orange':'red'));
+
+  return (
+    <div>
+      <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20, flexWrap:'wrap' }}>
+        <button style={appStyles.btnSecondary} onClick={onBack}>
+          <i className="fa-solid fa-arrow-left"></i> Retour à la liste
+        </button>
+        {canEdit && !editMode && (
+          <button style={appStyles.btnSecondary} onClick={startEdit}>
+            <i className="fa-solid fa-pen"></i> Modifier
+          </button>
+        )}
+        {canDelete && !editMode && (
+          <button style={{ ...appStyles.btnSecondary, borderColor:'var(--red)', color:'var(--red)' }} onClick={()=>setConfirmDelete(true)}>
+            <i className="fa-solid fa-trash"></i> Archiver
+          </button>
+        )}
+      </div>
+
+      {saved && <AlertBox type="success">Modifications enregistrées avec succès.</AlertBox>}
+
+      <div style={appStyles.card}>
+        <div style={{ display:'flex', alignItems:'flex-start', gap:20, flexWrap:'wrap' }}>
+          <div style={{ width:72, height:72, borderRadius:'50%', background:'var(--navy)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', flexShrink:0, fontFamily:'Lora, serif', fontSize:'1.6rem', fontWeight:700 }}>
+            {eleve.prenom?.[0]}{eleve.nom?.[0]}
+          </div>
+          <div style={{ flex:1 }}>
+            <h2 style={{ fontFamily:'Lora, serif', fontSize:'1.6rem', color:'var(--navy)' }}>{eleve.prenom} {eleve.nom}</h2>
+            <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginTop:8 }}>
+              <span style={appStyles.badge('beige')}><i className="fa-solid fa-book-open"></i> {eleve.niveau_scolaire || '—'}</span>
+              <span style={appStyles.badge(totalPaiements>0?'green':'red')}>
+                <i className={`fa-solid fa-${totalPaiements>0?'circle-check':'circle-exclamation'}`}></i>
+                {totalPaiements>0?`Cotisation à jour (${totalPaiements} €)`:'Cotisation en attente'}
+              </span>
+              <span style={appStyles.badge('beige')}><i className="fa-solid fa-chart-pie"></i> Présence {tauxPresence}%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {editMode ? (
+        <div style={appStyles.card}>
+          <h3 style={appStyles.sectionTitle}>Modifier les informations</h3>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+            <FormField label="Nom" required error={errors.nom}>
+              <input style={{ ...appStyles.input, borderColor: errors.nom?'var(--red)':'var(--border)' }} value={form.nom||''} onChange={e=>{ setForm(p=>({...p,nom:e.target.value})); setErrors(p=>({...p,nom:''})); }} />
+            </FormField>
+            <FormField label="Prénom" required error={errors.prenom}>
+              <input style={{ ...appStyles.input, borderColor: errors.prenom?'var(--red)':'var(--border)' }} value={form.prenom||''} onChange={e=>{ setForm(p=>({...p,prenom:e.target.value})); setErrors(p=>({...p,prenom:''})); }} />
+            </FormField>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginTop:14 }}>
+            <FormField label="Date de naissance" error={errors.ddn}>
+              <input style={{ ...appStyles.input, borderColor: errors.ddn?'var(--red)':'var(--border)' }} value={form.ddn||''} onChange={e=>{ const v=formatDateInput(e.target.value); setForm(p=>({...p,ddn:v})); setErrors(p=>({...p,ddn:''})); }} placeholder="JJ/MM/AAAA" />
+            </FormField>
+            <FormField label="Niveau" required error={errors.niveau}>
+              <select style={{ ...appStyles.input, borderColor: errors.niveau?'var(--red)':'var(--border)' }} value={form.niveau||''} onChange={e=>{ setForm(p=>({...p,niveau:e.target.value})); setErrors(p=>({...p,niveau:''})); }}>
+                <option value="">— Choisir —</option>
+                {["CE1","CE2","CM1","CM2","6e","5e","4e","3e"].map(n=><option key={n} value={n}>{n}</option>)}
+              </select>
+            </FormField>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginTop:14 }}>
+            <FormField label="Parent / Tuteur">
+              <input style={appStyles.input} value={form.parent||''} onChange={e=>setForm(p=>({...p,parent:e.target.value}))} />
+            </FormField>
+            <FormField label="Téléphone">
+              <input style={appStyles.input} type="tel" value={form.tel||''} onChange={e=>setForm(p=>({...p,tel:e.target.value}))} />
+            </FormField>
+          </div>
+          <div style={{ display:'flex', gap:12, marginTop:20, justifyContent:'flex-end' }}>
+            <button style={appStyles.btnSecondary} onClick={()=>{ setEditMode(false); setErrors({}); }}>Annuler</button>
+            <button style={appStyles.btnPrimary} onClick={handleSave}><i className="fa-solid fa-floppy-disk"></i> Enregistrer</button>
+          </div>
+        </div>
+      ) : (
+        <div style={appStyles.card}>
+          <h3 style={appStyles.sectionTitle}>Informations personnelles</h3>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:12 }}>
+            {[ ["Date de naissance", formatDateFR(eleve.date_naissance)||'—', "cake-candles"], ["Niveau", eleve.niveau_scolaire||'—', "book-open"], ["Parent / Tuteur", eleve.contact_parent_nom||'—', "person"], ["Téléphone", eleve.contact_parent_telephone||'—', "phone"] ].map(([k,v,ico])=>(
+              <div key={k} style={{ display:'flex', flexDirection:'column', gap:4, padding:'10px 14px', background:'var(--beige)', borderRadius:'var(--radius-sm)' }}>
+                <span style={{ color:'var(--text-muted)', fontSize:'0.85rem', display:'flex', alignItems:'center', gap:6 }}>
+                  <i className={`fa-solid fa-${ico}`} style={{ width:14 }}></i>{k}
+                </span>
+                <span style={{ fontWeight:600, fontSize:'1rem' }}>{v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))', gap:16, marginTop:16 }}>
+        {/* PRÉSENCES */}
+        <div style={appStyles.card}>
+          <h3 style={appStyles.sectionTitle}>Dernières présences</h3>
+          {presences.length === 0 ? (
+            <AlertBox type="info">Aucune présence enregistrée pour cet élève.</AlertBox>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              {presences.slice(0,5).map(p => (
+                <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:10, borderBottom:'1px solid var(--border)' }}>
+                  <div>
+                    <div style={{ fontWeight:600, fontSize:'0.95rem' }}>{p.matiere || 'Cours'}</div>
+                    <div style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>{formatDateFR(p.date_seance)}</div>
+                  </div>
+                  <span style={appStyles.badge(statutColor(p.statut))}>
+                    <i className={`fa-solid fa-${p.statut==='present'?'circle-check':(p.statut==='retard'?'clock':(p.statut==='absent_justifie'?'file-circle-check':'circle-xmark'))}`}></i>
+                    {statutLabel(p.statut)}
+                  </span>
+                </div>
+              ))}
+              {presences.length > 5 && (
+                <div style={{ textAlign:'center', color:'var(--text-muted)', fontSize:'0.88rem', marginTop:4 }}>
+                  + {presences.length - 5} séance(s) supplémentaire(s)
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* PAIMENTS */}
+        <div style={appStyles.card}>
+          <h3 style={appStyles.sectionTitle}>Paiements</h3>
+          {paiements.length === 0 ? (
+            <AlertBox type="info">Aucun paiement enregistré.</AlertBox>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              {paiements.slice(0,5).map(p => (
+                <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:10, borderBottom:'1px solid var(--border)' }}>
+                  <div>
+                    <div style={{ fontWeight:600, fontSize:'0.95rem' }}>{p.formule || 'Paiement'}</div>
+                    <div style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>{formatDateFR(p.date_paiement)} · {p.mode_paiement || '—'}</div>
+                  </div>
+                  <span style={{ fontWeight:700, fontSize:'1.05rem', color:'var(--green)' }}>{p.montant} €</span>
+                </div>
+              ))}
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingTop:6, borderTop:'2px solid var(--border)', marginTop:4 }}>
+                <span style={{ fontWeight:600 }}>Total payé</span>
+                <span style={{ fontWeight:700, fontSize:'1.1rem', color:'var(--navy)' }}>{totalPaiements} €</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* NOTES */}
+        <div style={appStyles.card}>
+          <h3 style={appStyles.sectionTitle}>Dernières notes</h3>
+          {notes.length === 0 ? (
+            <AlertBox type="info">Aucune note enregistrée.</AlertBox>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              {notes.slice(0,5).map(n => (
+                <div key={n.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', paddingBottom:10, borderBottom:'1px solid var(--border)' }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontWeight:600, fontSize:'0.95rem' }}>{n.matiere || '—'}</div>
+                    <div style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>{formatDateFR(n.date_evaluation)}</div>
+                    {n.appreciation && <div style={{ color:'var(--text-muted)', fontSize:'0.85rem', fontStyle:'italic', marginTop:2 }}>"{n.appreciation}"</div>}
+                  </div>
+                  <span style={{ background:'var(--navy)', color:'#fff', borderRadius:'var(--radius-sm)', padding:'4px 12px', fontWeight:700, fontSize:'1.05rem', flexShrink:0 }}>{n.valeur ?? '—'}/20</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {confirmDelete && (
+        <Modal title="Confirmer l'archivage" onClose={()=>setConfirmDelete(false)}>
+          <AlertBox type="warning">
+            Voulez-vous vraiment archiver la fiche de <strong>{eleve.prenom} {eleve.nom}</strong> ?<br />
+            Cette action est réversible depuis la base de données.
+          </AlertBox>
+          <div style={{ display:'flex', gap:12, marginTop:8, justifyContent:'flex-end' }}>
+            <button style={appStyles.btnSecondary} onClick={()=>setConfirmDelete(false)}>Annuler</button>
+            <button style={{ ...appStyles.btnPrimary, background:'var(--red)' }} onClick={handleDelete}>
+              <i className="fa-solid fa-trash"></i> Confirmer
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─── PRÉSENCES ─────────────────────────────────────────────────────────────
+function PresencesScreen({ user }) {
+  const [tab, setTab] = React.useState('saisie');
+  const [date, setDate] = React.useState(new Date().toISOString().split('T')[0]);
+  const [coursList, setCoursList] = React.useState([]);
+  const [coursSearch, setCoursSearch] = React.useState('');
+  const [selectedCours, setSelectedCours] = React.useState(null);
+  const [eleves, setEleves] = React.useState([]);
+  const [elevesParGroupe, setElevesParGroupe] = React.useState([]);
+  const [groupesCours, setGroupesCours] = React.useState([]);
+  const [groupeActif, setGroupeActif] = React.useState('tous');
+  const [presences, setPresences] = React.useState({});
+  const [comments, setComments] = React.useState({});
+  const [loading, setLoading] = React.useState(false);
+  const [saved, setSaved] = React.useState(false);
+  const [historique, setHistorique] = React.useState([]);
+  const [histFilters, setHistFilters] = React.useState({ eleve_id: '', cours_id: '', date_debut: '', date_fin: '' });
+  const [alertes, setAlertes] = React.useState([]);
+  const [seuilAlertes, setSeuilAlertes] = React.useState(3);
+  const jours = ["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"];
+  const canEdit = user && (user.role === 'admin' || user.role === 'secretaire' || user.role === 'enseignant');
+
+  const statutConfig = {
+    present:         { label:"Présent",         icon:"circle-check",       color:"green" },
+    absent:          { label:"Absent",           icon:"circle-xmark",       color:"red" },
+    retard:          { label:"En retard",        icon:"clock",              color:"orange" },
+    absent_justifie: { label:"Absent justifié",  icon:"file-circle-check",  color:"text-muted" },
+  };
+
+  React.useEffect(() => { loadCours(); }, []);
+  React.useEffect(() => { if (tab === 'alertes') loadAlertes(); }, [tab, seuilAlertes]);
+  React.useEffect(() => { if (tab === 'historique') loadHistorique(); }, [tab]);
+
+  const loadCours = async () => {
+    try {
+      const data = await api('/cours');
+      const all = Array.isArray(data) ? data : [];
+      const filtered = user?.role === 'enseignant'
+        ? all.filter(c => c.enseignant_id === user.id)
+        : all;
+      setCoursList(filtered);
+    } catch (e) { setCoursList([]); }
+  };
+
+  const loadElevesForCours = async (cours) => {
+    setLoading(true);
+    try {
+      const detail = await api(`/cours/${cours.id}`);
+      const grpList = detail?.groupes || [];
+      setGroupesCours(grpList);
+      const indivEleves = detail?.eleves || [];
+      // Construire la map élève -> groupes
+      const eleveGroupes = {};
+      grpList.forEach(g => {
+        (g.eleves || []).forEach(e => {
+          if (!eleveGroupes[e.id]) eleveGroupes[e.id] = [];
+          eleveGroupes[e.id].push(g);
+        });
+      });
+      const grpEleves = grpList.flatMap(g => g.eleves || []);
+      const all = [...grpEleves, ...indivEleves];
+      const uniqueMap = new Map();
+      all.forEach(e => {
+        if (!uniqueMap.has(e.id)) uniqueMap.set(e.id, { ...e, groupes: eleveGroupes[e.id] || [] });
+      });
+      const unique = Array.from(uniqueMap.values());
+      setEleves(unique);
+      setElevesParGroupe(unique);
+      // Charger présences existantes
+      const existing = await api(`/presences?cours_id=${cours.id}&date_seance=${date}`);
+      const map = {};
+      const comm = {};
+      (Array.isArray(existing) ? existing : []).forEach(p => {
+        map[p.eleve_id] = p.statut;
+        if (p.commentaire) comm[p.eleve_id] = p.commentaire;
+      });
+      setPresences(map);
+      setComments(comm);
+    } catch (e) {
+      setEleves([]); setElevesParGroupe([]); setGroupesCours([]); setPresences({}); setComments({});
+    } finally { setLoading(false); }
+  };
+
+  const handleSelectCours = (c) => {
+    setSelectedCours(c);
+    setCoursSearch('');
+    setGroupeActif('tous');
+    setSaved(false);
+    if (c) loadElevesForCours(c);
+    else { setEleves([]); setElevesParGroupe([]); setGroupesCours([]); setPresences({}); setComments({}); }
+  };
+
+  const filteredCours = coursList.filter(c => {
+    const txt = (c.matiere + ' ' + c.titre + ' ' + jours[c.jour_semaine||0] + ' ' + (c.salle||'') + ' ' + (c.enseignant_prenom||'') + ' ' + (c.enseignant_nom||'')).toLowerCase();
+    return txt.includes(coursSearch.toLowerCase());
+  });
+
+  const setStatut = (eleveId, statut) => {
+    setPresences(p => ({ ...p, [eleveId]: statut }));
+    setSaved(false);
+  };
+
+  const setComment = (eleveId, val) => {
+    setComments(c => ({ ...c, [eleveId]: val }));
+    setSaved(false);
+  };
+
+  const handleSave = async () => {
+    if (!selectedCours || eleves.length === 0) return;
+    setLoading(true);
+    try {
+      const payload = eleves.map(e => ({
+        cours_id: selectedCours.id,
+        eleve_id: e.id,
+        date_seance: date,
+        statut: presences[e.id] || 'absent',
+        commentaire: comments[e.id] || null,
+        saisi_par: user?.id || null
+      }));
+      await api('/presences/bulk', { method: 'POST', body: { presences: payload } });
+      setSaved(true);
+      setTimeout(()=>setSaved(false), 4000);
+    } catch (e) {
+      alert(e.message || "Erreur lors de l'enregistrement.");
+    } finally { setLoading(false); }
+  };
+
+  const loadHistorique = async () => {
+    setLoading(true);
+    try {
+      let url = '/presences?eleve_id=1';
+      if (histFilters.eleve_id) url = `/presences?eleve_id=${histFilters.eleve_id}`;
+      else if (histFilters.cours_id) url = `/presences?cours_id=${histFilters.cours_id}&date_seance=${histFilters.date_debut||date}`;
+      else url = `/presences?eleve_id=1`;
+      const data = await api(url);
+      setHistorique(Array.isArray(data) ? data : []);
+    } catch (e) { setHistorique([]); }
+    finally { setLoading(false); }
+  };
+
+  const loadAlertes = async () => {
+    try {
+      const data = await api(`/presences/alertes?seuil=${seuilAlertes}`);
+      setAlertes(Array.isArray(data) ? data : []);
+    } catch (e) { setAlertes([]); }
+  };
+
+  const formatHeure = (h) => h ? h.slice(0,5) : '—';
+  const jourLabel = (js) => js !== undefined && js !== null ? jours[js] : '—';
+  const statutBadge = (s) => statutConfig[s] || { label: s, icon: 'circle', color: 'beige' };
+
+  const nbPresent = eleves.filter(e => presences[e.id] === 'present').length;
+  const nbAbsent = eleves.filter(e => ['absent','absent_justifie'].includes(presences[e.id])).length;
+  const nbRetard = eleves.filter(e => presences[e.id] === 'retard').length;
+
+  const elevesFiltres = groupeActif === 'tous'
+    ? eleves
+    : eleves.filter(e => e.groupes?.some(g => String(g.id) === String(groupeActif)));
+
+  return (
+    <div>
+      <PageHeader title="Présences" />
+
+      <div style={{ display:'flex', background:'var(--beige-dark)', borderRadius:'var(--radius-sm)', padding:3, marginBottom:24 }}>
+        {[{k:'saisie',l:'Saisie du jour',i:'clipboard-check'},{k:'historique',l:'Historique',i:'clock-rotate-left'},{k:'alertes',l:'Alertes',i:'triangle-exclamation'}].map(t => (
+          <button key={t.k} onClick={()=>setTab(t.k)}
+            style={{ flex:1, padding:'10px 16px', borderRadius:'var(--radius-sm)', border:'none', fontWeight:600, fontSize:'0.95rem', cursor:'pointer', background: tab===t.k?'var(--white)':'transparent', color: tab===t.k?'var(--navy)':'var(--text-muted)', boxShadow: tab===t.k?'var(--shadow)':'none', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+            <i className={`fa-solid fa-${t.i}`}></i> {t.l}
+          </button>
+        ))}
+      </div>
+
+      {/* ─── SAISIE DU JOUR ─── */}
+      {tab === 'saisie' && (
+        <div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))', gap:14, marginBottom:20 }}>
+            <FormField label="Date de la séance">
+              <input type="date" style={appStyles.input} value={date} onChange={e=>{ setDate(e.target.value); setSaved(false); if (selectedCours) loadElevesForCours(selectedCours); }} />
+            </FormField>
+            <FormField label="Cours">
+              <div style={{ position:'relative' }}>
+                <i className="fa-solid fa-magnifying-glass" style={{ position:'absolute', left:14, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', pointerEvents:'none' }}></i>
+                <input style={{ ...appStyles.input, paddingLeft:42 }} value={selectedCours ? `${selectedCours.matiere} · ${jourLabel(selectedCours.jour_semaine)} ${formatHeure(selectedCours.heure_debut)}` : coursSearch} onChange={e=>{ setCoursSearch(e.target.value); setSelectedCours(null); }} placeholder="Rechercher un cours…" />
+                {!selectedCours && coursSearch && (
+                  <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, right:0, maxHeight:220, overflowY:'auto', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)', background:'var(--white)', zIndex:50, boxShadow:'var(--shadow-lg)' }}>
+                    {filteredCours.length === 0 ? (
+                      <div style={{ padding:'12px 16px', color:'var(--text-muted)', fontSize:'0.9rem' }}>Aucun cours trouvé.</div>
+                    ) : (
+                      filteredCours.map(c => (
+                        <button key={c.id} onClick={()=>handleSelectCours(c)}
+                          style={{ display:'block', width:'100%', textAlign:'left', padding:'12px 16px', border:'none', borderBottom:'1px solid var(--border)', background:'transparent', cursor:'pointer' }}
+                          onMouseEnter={ev=>ev.currentTarget.style.background='var(--beige)'}
+                          onMouseLeave={ev=>ev.currentTarget.style.background='transparent'}>
+                          <div style={{ fontWeight:600, fontSize:'0.97rem' }}>{c.matiere} {c.titre ? `— ${c.titre}` : ''}</div>
+                          <div style={{ color:'var(--text-muted)', fontSize:'0.85rem', marginTop:2 }}>{jourLabel(c.jour_semaine)} {formatHeure(c.heure_debut)} – {formatHeure(c.heure_fin)} · {c.salle || '—'} · {c.enseignant_prenom || ''} {c.enseignant_nom || ''}</div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            </FormField>
+          </div>
+
+          {saved && <AlertBox type="success"><i className="fa-solid fa-circle-check"></i> Présences enregistrées avec succès.</AlertBox>}
+
+          {selectedCours && (
+            <div style={{ ...appStyles.card, background:'var(--navy)', color:'#fff', marginBottom:20 }}>
+              <h2 style={{ fontFamily:'Lora, serif', fontSize:'1.3rem', marginBottom:4 }}>{selectedCours.matiere}</h2>
+              <p style={{ opacity:0.8, fontSize:'0.95rem' }}>{jourLabel(selectedCours.jour_semaine)} {formatHeure(selectedCours.heure_debut)} – {formatHeure(selectedCours.heure_fin)} · {selectedCours.salle || '—'}</p>
+            </div>
+          )}
+
+          {loading ? (
+            <div style={{ textAlign:'center', padding:40 }}>
+              <i className="fa-solid fa-spinner fa-spin" style={{ fontSize:'2rem', color:'var(--navy)' }}></i>
+            </div>
+          ) : selectedCours && eleves.length === 0 ? (
+            <AlertBox type="info">Ce cours n'a aucun groupe avec des élèves actifs, ni d'élève assigné individuellement.</AlertBox>
+          ) : selectedCours ? (
+            <>
+              <div style={{ display:'flex', gap:12, flexWrap:'wrap', marginBottom:16 }}>
+                <span style={appStyles.badge('green')}><i className="fa-solid fa-circle-check"></i> {nbPresent} présent{nbPresent>1?'s':''}</span>
+                <span style={appStyles.badge('red')}><i className="fa-solid fa-circle-xmark"></i> {nbAbsent} absent{nbAbsent>1?'s':''}</span>
+                <span style={appStyles.badge('orange')}><i className="fa-solid fa-clock"></i> {nbRetard} retard{nbRetard>1?'s':''}</span>
+                <span style={appStyles.badge('beige')}><i className="fa-solid fa-users"></i> {eleves.length} au total</span>
+              </div>
+
+              {/* Filtres par groupe */}
+              {groupesCours.length > 0 && (
+                <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:20, alignItems:'center' }}>
+                  <span style={{ fontWeight:600, fontSize:'0.9rem', color:'var(--text-muted)' }}><i className="fa-solid fa-filter"></i> Filtrer par groupe :</span>
+                  <button onClick={()=>setGroupeActif('tous')}
+                    style={{ padding:'6px 14px', borderRadius:20, border:'2px solid', fontSize:'0.88rem', fontWeight:600, cursor:'pointer',
+                      background: groupeActif==='tous'?'var(--navy)':'var(--white)', color: groupeActif==='tous'?'#fff':'var(--navy)', borderColor: groupeActif==='tous'?'var(--navy)':'var(--border)' }}>
+                    Tous
+                  </button>
+                  {groupesCours.map(g => (
+                    <button key={g.id} onClick={()=>setGroupeActif(String(g.id))}
+                      style={{ padding:'6px 14px', borderRadius:20, border:'2px solid', fontSize:'0.88rem', fontWeight:600, cursor:'pointer',
+                        background: groupeActif===String(g.id)?'var(--navy)':'var(--white)', color: groupeActif===String(g.id)?'#fff':'var(--navy)', borderColor: groupeActif===String(g.id)?'var(--navy)':'var(--border)' }}>
+                      {g.nom}
+                    </button>
+                  ))}
+                  {groupesCours.length > 0 && eleves.some(e => !e.groupes?.length) && (
+                    <button onClick={()=>setGroupeActif('individuel')}
+                      style={{ padding:'6px 14px', borderRadius:20, border:'2px solid', fontSize:'0.88rem', fontWeight:600, cursor:'pointer',
+                        background: groupeActif==='individuel'?'var(--navy)':'var(--white)', color: groupeActif==='individuel'?'#fff':'var(--navy)', borderColor: groupeActif==='individuel'?'var(--navy)':'var(--border)' }}>
+                      Individuels
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <div style={{ display:'flex', flexDirection:'column', gap:12, marginBottom:24 }}>
+                {elevesFiltres.map(e => (
+                  <div key={e.id} style={{ ...appStyles.card, padding:'16px 20px', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:14 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:12, minWidth:200 }}>
+                      <div style={{ width:40, height:40, borderRadius:'50%', background:'var(--navy)', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:'0.9rem' }}>
+                        {e.prenom?.[0]}{e.nom?.[0]}
+                      </div>
+                      <div>
+                        <div style={{ fontWeight:700, fontSize:'1.05rem' }}>{e.prenom} {e.nom}</div>
+                        <div style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>
+                          {e.niveau_scolaire || '—'}
+                          {e.groupes?.length > 0 && <span> · {e.groupes.map(g=>g.nom).join(', ')}</span>}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display:'flex', gap:8, flexWrap:'wrap', flex:1, justifyContent:'flex-end' }}>
+                      {Object.entries(statutConfig).map(([s, cfg]) => {
+                        const isActive = presences[e.id] === s;
+                        const activeColors = { green:{bg:'var(--green)',color:'#fff'}, red:{bg:'var(--red)',color:'#fff'}, orange:{bg:'var(--orange)',color:'#fff'}, 'text-muted':{bg:'var(--text-muted)',color:'#fff'} };
+                        return (
+                          <button key={s}
+                            style={{
+                              padding:'9px 14px', fontSize:'0.88rem', fontWeight:600,
+                              borderRadius:'var(--radius-sm)', cursor:'pointer', border:'2px solid',
+                              display:'inline-flex', alignItems:'center', gap:6,
+                              ...(isActive
+                                ? { ...activeColors[cfg.color], borderColor:'transparent' }
+                                : { background:'var(--white)', color:'var(--text-muted)', borderColor:'var(--border)' })
+                            }}
+                            onClick={()=>setStatut(e.id, s)}>
+                            <i className={`fa-solid fa-${cfg.icon}`}></i> {cfg.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <input style={{ ...appStyles.input, maxWidth:220, fontSize:'0.9rem' }} value={comments[e.id]||''} onChange={ev=>setComment(e.id, ev.target.value)} placeholder="Commentaire (facultatif)" />
+                  </div>
+                ))}
+              </div>
+              {canEdit && (
+                <div style={{ display:'flex', gap:12, justifyContent:'flex-end' }}>
+                  <button style={appStyles.btnSuccess} onClick={handleSave} disabled={loading}>
+                    <i className="fa-solid fa-floppy-disk"></i> {loading ? 'Enregistrement…' : 'Enregistrer les présences'}
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
+            <AlertBox type="info">Sélectionnez un cours pour commencer la saisie.</AlertBox>
+          )}
+        </div>
+      )}
+
+      {/* ─── HISTORIQUE ─── */}
+      {tab === 'historique' && (
+        <div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:14, marginBottom:20 }}>
+            <FormField label="Élève">
+              <input style={appStyles.input} value={histFilters.eleve_id} onChange={e=>setHistFilters(f=>({...f,eleve_id:e.target.value}))} placeholder="ID élève ou laisser vide" />
+            </FormField>
+            <FormField label="Cours">
+              <select style={appStyles.input} value={histFilters.cours_id} onChange={e=>setHistFilters(f=>({...f,cours_id:e.target.value}))}>
+                <option value="">Tous</option>
+                {coursList.map(c=><option key={c.id} value={c.id}>{c.matiere}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Date début">
+              <input type="date" style={appStyles.input} value={histFilters.date_debut} onChange={e=>setHistFilters(f=>({...f,date_debut:e.target.value}))} />
+            </FormField>
+            <FormField label="Date fin">
+              <input type="date" style={appStyles.input} value={histFilters.date_fin} onChange={e=>setHistFilters(f=>({...f,date_fin:e.target.value}))} />
+            </FormField>
+          </div>
+          <button style={{ ...appStyles.btnPrimary, marginBottom:20 }} onClick={loadHistorique}><i className="fa-solid fa-magnifying-glass"></i> Rechercher</button>
+
+          {loading ? (
+            <div style={{ textAlign:'center', padding:40 }}><i className="fa-solid fa-spinner fa-spin" style={{ fontSize:'2rem', color:'var(--navy)' }}></i></div>
+          ) : historique.length === 0 ? (
+            <AlertBox type="info">Aucune présence trouvée.</AlertBox>
+          ) : (
+            <div style={{ ...appStyles.card, padding:0, overflowX:'auto' }}>
+              <table style={appStyles.table}>
+                <thead>
+                  <tr><th style={appStyles.th}>Date</th><th style={appStyles.th}>Cours</th><th style={appStyles.th}>Élève</th><th style={appStyles.th}>Statut</th><th style={appStyles.th}>Commentaire</th></tr>
+                </thead>
+                <tbody>
+                  {historique.map((h, i) => {
+                    const cfg = statutBadge(h.statut);
+                    return (
+                      <tr key={i} onMouseEnter={e=>e.currentTarget.style.background='var(--beige)'} onMouseLeave={e=>e.currentTarget.style.background='var(--white)'}>
+                        <td style={appStyles.td}>{formatDateFR(h.date_seance)}</td>
+                        <td style={appStyles.td}>{h.matiere || '—'}</td>
+                        <td style={appStyles.td}>{h.eleve_prenom} {h.eleve_nom}</td>
+                        <td style={appStyles.td}><span style={appStyles.badge(cfg.color)}><i className={`fa-solid fa-${cfg.icon}`}></i> {cfg.label}</span></td>
+                        <td style={appStyles.td}>{h.commentaire || '—'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── ALERTES ─── */}
+      {tab === 'alertes' && (
+        <div>
+          <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:20, flexWrap:'wrap' }}>
+            <FormField label="Seuil d'alerte (absences sur 30j)" inline>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <input type="number" min={1} max={20} style={{ ...appStyles.input, width:80, textAlign:'center' }} value={seuilAlertes} onChange={e=>setSeuilAlertes(+e.target.value)} />
+                <button style={{ ...appStyles.btnPrimary, padding:'10px 16px' }} onClick={loadAlertes}><i className="fa-solid fa-rotate"></i> Actualiser</button>
+              </div>
+            </FormField>
+          </div>
+          {alertes.length === 0 ? (
+            <AlertBox type="success">Aucune alerte d'absence au-delà du seuil de {seuilAlertes} absence(s).</AlertBox>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+              {alertes.map(a => (
+                <div key={a.eleve_id} style={{ ...appStyles.card, borderLeft:'4px solid var(--red)', display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:12 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                    <div style={{ width:44, height:44, borderRadius:'50%', background:'var(--red-light)', color:'var(--red)', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:'1rem' }}>
+                      <i className="fa-solid fa-triangle-exclamation"></i>
+                    </div>
+                    <div>
+                      <div style={{ fontWeight:700, fontSize:'1.05rem' }}>{a.prenom} {a.nom}</div>
+                      <div style={{ color:'var(--text-muted)', fontSize:'0.9rem' }}>{a.nb_absences} absences sur les 30 derniers jours</div>
+                    </div>
+                  </div>
+                  <span style={appStyles.badge('red')}><i className="fa-solid fa-circle-xmark"></i> {a.nb_absences} absences</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── FINANCES ──────────────────────────────────────────────────────────────
+function FinancesScreen({ user }) {
+  const [paiements, setPaiements] = React.useState([]);
+  const [stats, setStats] = React.useState(null);
+  const [impayes, setImpayes] = React.useState([]);
+  const [eleves, setEleves] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [modal, setModal] = React.useState(null);
+  const [form, setForm] = React.useState({});
+  const [errors, setErrors] = React.useState({});
+  const [saved, setSaved] = React.useState(false);
+  const [confirmDelete, setConfirmDelete] = React.useState(null);
+  const [eleveSearch, setEleveSearch] = React.useState('');
+  const [selectedEleve, setSelectedEleve] = React.useState(null);
+  const canEdit = user && (user.role === 'admin' || user.role === 'secretaire');
+
+  React.useEffect(() => { loadData(); }, []);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [pData, sData, iData, eData] = await Promise.all([
+        api('/paiements'),
+        api('/paiements/stats'),
+        api('/paiements/impayes'),
+        api('/eleves?statut=actif')
+      ]);
+      setPaiements(Array.isArray(pData) ? pData : []);
+      setStats(sData);
+      setImpayes(Array.isArray(iData) ? iData : []);
+      setEleves(Array.isArray(eData) ? eData : []);
+    } catch (e) {
+      setPaiements([]); setStats(null); setImpayes([]); setEleves([]);
+    } finally { setLoading(false); }
+  };
+
+  const validate = () => {
+    const err = {};
+    if (!form.eleve_id) err.eleve_id = "Sélectionnez un élève.";
+    if (!form.montant || form.montant <= 0) err.montant = "Saisissez un montant valide.";
+    if (!form.date_paiement) err.date_paiement = "Saisissez la date du paiement.";
+    return err;
+  };
+
+  const handleSave = async () => {
+    const err = validate();
+    if (Object.keys(err).length > 0) { setErrors(err); return; }
+    try {
+      const payload = {
+        eleve_id: +form.eleve_id,
+        montant: +form.montant,
+        date_paiement: form.date_paiement,
+        mode_paiement: form.mode_paiement || null,
+        formule: form.formule || null,
+        periode_debut: form.periode_debut || null,
+        periode_fin: form.periode_fin || null,
+        notes: form.notes || null,
+        saisi_par: user?.id || null
+      };
+      if (modal === 'add') {
+        const created = await api('/paiements', { method: 'POST', body: payload });
+        setPaiements(prev => [created, ...prev]);
+      } else {
+        const updated = await api(`/paiements/${form.id}`, { method: 'PUT', body: payload });
+        setPaiements(prev => prev.map(p => p.id === updated.id ? updated : p));
+      }
+      setSaved(true); setTimeout(()=>setSaved(false), 4000);
+      // Recharger stats & impayés
+      const [sData, iData] = await Promise.all([api('/paiements/stats'), api('/paiements/impayes')]);
+      setStats(sData); setImpayes(Array.isArray(iData)?iData:[]);
+    } catch (e) {
+      alert(e.message || "Erreur lors de la sauvegarde.");
+    }
+    setModal(null); setForm({}); setErrors({}); setEleveSearch(''); setSelectedEleve(null);
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await api(`/paiements/${id}`, { method: 'DELETE' });
+      setPaiements(prev => prev.filter(p => p.id !== id));
+      const [sData, iData] = await Promise.all([api('/paiements/stats'), api('/paiements/impayes')]);
+      setStats(sData); setImpayes(Array.isArray(iData)?iData:[]);
+    } catch (e) {
+      alert(e.message || "Impossible de supprimer ce paiement.");
+    }
+    setConfirmDelete(null);
+  };
+
+  const openAdd = () => {
+    setForm({ montant: 60, mode_paiement: 'especes', formule: 'mensuel', date_paiement: new Date().toISOString().split('T')[0], periode_debut: '', periode_fin: '' });
+    setErrors({}); setModal('add');
+  };
+
+  const openEdit = (p) => {
+    setForm({
+      id: p.id, eleve_id: p.eleve_id, montant: p.montant,
+      date_paiement: p.date_paiement,
+      mode_paiement: p.mode_paiement || 'especes',
+      formule: p.formule || 'mensuel',
+      periode_debut: p.periode_debut || '',
+      periode_fin: p.periode_fin || '',
+      notes: p.notes || ''
+    });
+    const el = eleves.find(e => e.id === p.eleve_id);
+    if (el) { setSelectedEleve(el); setEleveSearch(`${el.prenom} ${el.nom}`); }
+    setErrors({}); setModal('edit');
+  };
+
+  const openPayImpaye = (el) => {
+    setForm({ eleve_id: el.id, montant: 60, mode_paiement: 'especes', formule: 'mensuel', date_paiement: new Date().toISOString().split('T')[0], periode_debut: '', periode_fin: '' });
+    setSelectedEleve(el); setEleveSearch(`${el.prenom} ${el.nom}`);
+    setErrors({}); setModal('add');
+  };
+
+  const filteredEleves = eleves.filter(e => {
+    const txt = (e.nom + ' ' + e.prenom).toLowerCase();
+    return txt.includes(eleveSearch.toLowerCase());
+  });
+
+  const totalMois = stats?.reduce((s, x) => s + (x.total_recettes || 0), 0) || 0;
+
+  return (
+    <div>
+      <PageHeader title="Paiements et cotisations"
+        action={canEdit && <button style={appStyles.btnPrimary} onClick={openAdd}><i className="fa-solid fa-plus"></i> Enregistrer un paiement</button>} />
+
+      {saved && <AlertBox type="success">Paiement enregistré avec succès.</AlertBox>}
+
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:14, marginBottom:24 }}>
+        <StatCard icon="circle-check" label="Total encaissé (mois)" value={`${totalMois.toFixed(2)} €`} color="green" />
+        <StatCard icon="triangle-exclamation" label="Familles en retard" value={impayes.length} color="orange" />
+        <StatCard icon="euro-sign" label="Nombre de paiements" value={paiements.length} color="beige" />
+      </div>
+
+      {impayes.length > 0 && (
+        <div style={{ marginBottom:24 }}>
+          <h3 style={{ fontFamily:'Lora, serif', fontSize:'1.1rem', color:'var(--red)', marginBottom:12, display:'flex', alignItems:'center', gap:8 }}>
+            <i className="fa-solid fa-triangle-exclamation"></i> Paiements en retard
+          </h3>
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {impayes.map(el => (
+              <div key={el.id} style={{ ...appStyles.card, padding:'16px 20px', display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:12, border:'2px solid var(--red-light)' }}>
+                <div>
+                  <div style={{ fontWeight:700, fontSize:'1rem' }}>{el.prenom} {el.nom}</div>
+                  <div style={{ color:'var(--text-muted)', fontSize:'0.88rem' }}>
+                    Dernier paiement : {el.dernier_paiement ? formatDateFR(el.dernier_paiement) : 'Jamais'} · Total payé : {el.total_paye || 0} €
+                  </div>
+                </div>
+                {canEdit && (
+                  <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+                    <button style={appStyles.btnSecondary}><i className="fa-solid fa-envelope"></i> Relancer</button>
+                    <button style={appStyles.btnSuccess} onClick={()=>openPayImpaye(el)}><i className="fa-solid fa-euro-sign"></i> Enregistrer paiement</button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <h3 style={{ fontFamily:'Lora, serif', fontSize:'1.1rem', color:'var(--navy)', marginBottom:12 }}>Tous les paiements</h3>
+      {loading ? (
+        <div style={{ textAlign:'center', padding:40 }}><i className="fa-solid fa-spinner fa-spin" style={{ fontSize:'2rem', color:'var(--navy)' }}></i></div>
+      ) : paiements.length === 0 ? (
+        <AlertBox type="info">Aucun paiement enregistré.</AlertBox>
+      ) : (
+        <div style={{ ...appStyles.card, padding:0, overflowX:'auto' }}>
+          <table style={appStyles.table}>
+            <thead>
+              <tr>
+                <th style={appStyles.th}>Élève</th>
+                <th style={appStyles.th}>Formule</th>
+                <th style={appStyles.th}>Montant</th>
+                <th style={appStyles.th}>Date</th>
+                <th style={appStyles.th}>Mode</th>
+                <th style={appStyles.th}>Reçu</th>
+                <th style={appStyles.th}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paiements.map(p => (
+                <tr key={p.id}
+                    onMouseEnter={e=>e.currentTarget.style.background='var(--beige)'}
+                    onMouseLeave={e=>e.currentTarget.style.background='var(--white)'}>
+                  <td style={appStyles.td}><strong>{p.eleve_prenom} {p.eleve_nom}</strong></td>
+                  <td style={appStyles.td}>{p.formule || '—'}</td>
+                  <td style={appStyles.td}>{p.montant} €</td>
+                  <td style={appStyles.td}>{formatDateFR(p.date_paiement)}</td>
+                  <td style={appStyles.td}>{p.mode_paiement || '—'}</td>
+                  <td style={appStyles.td}>
+                    {p.recu_genere ? (
+                      <span style={appStyles.badge('green')}><i className="fa-solid fa-file-invoice"></i> {p.recu_numero || 'Généré'}</span>
+                    ) : (
+                      <span style={appStyles.badge('beige')}>—</span>
+                    )}
+                  </td>
+                  <td style={appStyles.td}>
+                    <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                      <button style={{ ...appStyles.btnSecondary, padding:'7px 12px', fontSize:'0.85rem' }} onClick={async ()=>{
+                        try {
+                          const token = localStorage.getItem('admisco_token');
+                          const res = await fetch(`/api/paiements/${p.id}/recu`, { headers: { 'Authorization': `Bearer ${token}` } });
+                          if (!res.ok) throw new Error('Erreur');
+                          const blob = await res.blob();
+                          const url = URL.createObjectURL(blob);
+                          window.open(url, '_blank');
+                        } catch (e) { alert('Impossible de générer le reçu.'); }
+                      }}>
+                        <i className="fa-solid fa-file-pdf"></i> Reçu
+                      </button>
+                      {canEdit && (
+                        <>
+                          <button style={{ ...appStyles.btnSecondary, padding:'7px 12px', fontSize:'0.85rem' }} onClick={()=>openEdit(p)}><i className="fa-solid fa-pen"></i></button>
+                          <button style={{ padding:'7px 12px', fontSize:'0.85rem', borderRadius:'var(--radius-sm)', border:'2px solid var(--red)', background:'var(--white)', color:'var(--red)', fontWeight:600, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 }} onClick={()=>setConfirmDelete(p)}>
+                            <i className="fa-solid fa-trash"></i>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {modal && (
+        <Modal title={modal==='add' ? 'Enregistrer un paiement' : 'Modifier le paiement'} onClose={()=>{ setModal(null); setForm({}); setErrors({}); setEleveSearch(''); setSelectedEleve(null); }}>
+          {modal==='add' && (
+            <FormField label="Élève" required error={errors.eleve_id}>
+              <div style={{ position:'relative' }}>
+                <i className="fa-solid fa-magnifying-glass" style={{ position:'absolute', left:14, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', pointerEvents:'none' }}></i>
+                <input style={{ ...appStyles.input, paddingLeft:42, borderColor: errors.eleve_id ? 'var(--red)' : 'var(--border)' }} value={selectedEleve ? `${selectedEleve.prenom} ${selectedEleve.nom}` : eleveSearch} onChange={e=>{ setEleveSearch(e.target.value); setSelectedEleve(null); setErrors(p=>({...p,eleve_id:''})); }} placeholder="Rechercher un élève…" />
+                {!selectedEleve && eleveSearch && (
+                  <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, right:0, maxHeight:220, overflowY:'auto', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)', background:'var(--white)', zIndex:50, boxShadow:'var(--shadow-lg)' }}>
+                    {filteredEleves.length === 0 ? (
+                      <div style={{ padding:'12px 16px', color:'var(--text-muted)', fontSize:'0.9rem' }}>Aucun élève trouvé.</div>
+                    ) : (
+                      filteredEleves.map(e => (
+                        <button key={e.id} onClick={()=>{ setSelectedEleve(e); setEleveSearch(`${e.prenom} ${e.nom}`); setForm(p=>({...p,eleve_id:e.id})); }}
+                          style={{ display:'block', width:'100%', textAlign:'left', padding:'12px 16px', border:'none', borderBottom:'1px solid var(--border)', background:'transparent', cursor:'pointer' }}
+                          onMouseEnter={ev=>ev.currentTarget.style.background='var(--beige)'}
+                          onMouseLeave={ev=>ev.currentTarget.style.background='transparent'}>
+                          {e.prenom} {e.nom} <span style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>· {e.niveau_scolaire || '—'}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            </FormField>
+          )}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+            <FormField label="Montant (€)" required error={errors.montant}>
+              <input type="number" min={0} step={0.01} style={{ ...appStyles.input, borderColor: errors.montant ? 'var(--red)' : 'var(--border)' }} value={form.montant||''} onChange={e=>{ setForm(p=>({...p,montant:+e.target.value})); setErrors(p=>({...p,montant:''})); }} />
+            </FormField>
+            <FormField label="Date du paiement" required error={errors.date_paiement}>
+              <input type="date" style={{ ...appStyles.input, borderColor: errors.date_paiement ? 'var(--red)' : 'var(--border)' }} value={form.date_paiement||''} onChange={e=>{ setForm(p=>({...p,date_paiement:e.target.value})); setErrors(p=>({...p,date_paiement:''})); }} />
+            </FormField>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+            <FormField label="Mode de paiement">
+              <select style={appStyles.input} value={form.mode_paiement||'especes'} onChange={e=>setForm(p=>({...p,mode_paiement:e.target.value}))}>
+                {['especes','cheque','virement','carte','autre'].map(m=><option key={m} value={m}>{m.charAt(0).toUpperCase()+m.slice(1)}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Formule">
+              <select style={appStyles.input} value={form.formule||'mensuel'} onChange={e=>setForm(p=>({...p,formule:e.target.value}))}>
+                {['mensuel','trimestriel','annuel','ponctuel'].map(f=><option key={f} value={f}>{f.charAt(0).toUpperCase()+f.slice(1)}</option>)}
+              </select>
+            </FormField>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+            <FormField label="Période début">
+              <input type="date" style={appStyles.input} value={form.periode_debut||''} onChange={e=>setForm(p=>({...p,periode_debut:e.target.value}))} />
+            </FormField>
+            <FormField label="Période fin">
+              <input type="date" style={appStyles.input} value={form.periode_fin||''} onChange={e=>setForm(p=>({...p,periode_fin:e.target.value}))} />
+            </FormField>
+          </div>
+          <FormField label="Notes">
+            <textarea style={{ ...appStyles.input, resize:'vertical', minHeight:80 }} value={form.notes||''} onChange={e=>setForm(p=>({...p,notes:e.target.value}))} placeholder="Commentaire éventuel…" />
+          </FormField>
+          <div style={{ display:'flex', gap:12, justifyContent:'flex-end', marginTop:8 }}>
+            <button style={appStyles.btnSecondary} onClick={()=>{ setModal(null); setForm({}); setErrors({}); setEleveSearch(''); setSelectedEleve(null); }}>Annuler</button>
+            <button style={appStyles.btnSuccess} onClick={handleSave}><i className="fa-solid fa-floppy-disk"></i> Enregistrer</button>
+          </div>
+        </Modal>
+      )}
+
+      {confirmDelete && (
+        <Modal title="Confirmer la suppression" onClose={()=>setConfirmDelete(null)}>
+          <AlertBox type="warning">
+            Voulez-vous vraiment supprimer le paiement de <strong>{confirmDelete.eleve_prenom} {confirmDelete.eleve_nom}</strong> ({confirmDelete.montant} €) ?<br />
+            Cette action est irréversible.
+          </AlertBox>
+          <div style={{ display:'flex', gap:12, marginTop:8, justifyContent:'flex-end' }}>
+            <button style={appStyles.btnSecondary} onClick={()=>setConfirmDelete(null)}>Annuler</button>
+            <button style={{ ...appStyles.btnPrimary, background:'var(--red)' }} onClick={()=>handleDelete(confirmDelete.id)}>
+              <i className="fa-solid fa-trash"></i> Confirmer
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─── GROUPES ───────────────────────────────────────────────────────────────
+function GroupesScreen({ user }) {
+  const [groupes, setGroupes] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [modal, setModal] = React.useState(null);
+  const [form, setForm] = React.useState({});
+  const [errors, setErrors] = React.useState({});
+  const [fiche, setFiche] = React.useState(null);
+  const [confirmDelete, setConfirmDelete] = React.useState(null);
+  const canEdit = user && (user.role === 'admin' || user.role === 'secretaire');
+
+  React.useEffect(() => { loadGroupes(); }, []);
+
+  const loadGroupes = async () => {
+    setLoading(true);
+    try {
+      const data = await api('/groupes');
+      setGroupes(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setGroupes([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const validate = () => {
+    const err = {};
+    if (!form.nom?.trim()) err.nom = "Ce champ est obligatoire.";
+    if (!form.niveau?.trim()) err.niveau = "Choisissez un niveau.";
+    if (!form.type?.trim()) err.type = "Choisissez un type.";
+    return err;
+  };
+
+  const handleSave = async () => {
+    const err = validate();
+    if (Object.keys(err).length > 0) { setErrors(err); return; }
+    try {
+      if (modal === 'add') {
+        const created = await api('/groupes', { method: 'POST', body: { nom: form.nom, niveau: form.niveau, type: form.type, description: form.description || null } });
+        setGroupes(prev => [...prev, created]);
+      } else {
+        const updated = await api(`/groupes/${form.id}`, { method: 'PUT', body: { nom: form.nom, niveau: form.niveau, type: form.type, description: form.description || null } });
+        setGroupes(prev => prev.map(g => g.id === updated.id ? updated : g));
+      }
+    } catch (e) {
+      alert(e.message || "Erreur lors de la sauvegarde.");
+    }
+    setModal(null); setForm({}); setErrors({});
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await api(`/groupes/${id}`, { method: 'DELETE' });
+      setGroupes(prev => prev.filter(g => g.id !== id));
+    } catch (e) {
+      alert(e.message || "Impossible d'archiver ce groupe.");
+    }
+    setConfirmDelete(null);
+  };
+
+  const openAdd = () => { setForm({ type: 'niveau' }); setErrors({}); setModal('add'); };
+  const openEdit = (g) => { setForm({ ...g }); setErrors({}); setModal('edit'); };
+
+  if (fiche) return <FicheGroupe groupe={fiche} user={user} onBack={()=>setFiche(null)} onUpdate={(u)=>setGroupes(prev=>prev.map(g=>g.id===u.id?u:g))} onDelete={(id)=>setGroupes(prev=>prev.filter(g=>g.id!==id))} />;
+
+  return (
+    <div>
+      <PageHeader title={`Groupes d'élèves (${groupes.length})`}
+        action={canEdit && <button style={appStyles.btnPrimary} onClick={openAdd}><i className="fa-solid fa-plus"></i> Créer un groupe</button>} />
+
+      {loading ? (
+        <div style={{ textAlign:'center', padding:40 }}>
+          <i className="fa-solid fa-spinner fa-spin" style={{ fontSize:'2rem', color:'var(--navy)' }}></i>
+          <p style={{ marginTop:12, color:'var(--text-muted)' }}>Chargement…</p>
+        </div>
+      ) : groupes.length === 0 ? (
+        <AlertBox type="info">Aucun groupe trouvé.</AlertBox>
+      ) : (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))', gap:16 }}>
+          {groupes.map(g => (
+            <div key={g.id} style={appStyles.card}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
+                <div>
+                  <h3 style={{ fontFamily:'Lora, serif', fontSize:'1.15rem', color:'var(--navy)', marginBottom:6 }}>{g.nom}</h3>
+                  <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                    <span style={appStyles.badge('beige')}>{g.niveau || '—'}</span>
+                    <span style={appStyles.badge('beige')}>{g.type || 'niveau'}</span>
+                  </div>
+                </div>
+              </div>
+              <p style={{ color:'var(--text-muted)', fontSize:'0.9rem', marginBottom:16 }}>{g.description || 'Aucune description.'}</p>
+              <div style={{ display:'flex', gap:8 }}>
+                <button style={{ ...appStyles.btnSecondary, flex:1, justifyContent:'center', padding:'9px 12px', fontSize:'0.9rem' }} onClick={()=>setFiche(g)}>
+                  <i className="fa-solid fa-eye"></i> Voir
+                </button>
+                {canEdit && (
+                  <>
+                    <button style={{ ...appStyles.btnSecondary, padding:'9px 12px', fontSize:'0.9rem' }} onClick={()=>openEdit(g)}>
+                      <i className="fa-solid fa-pen"></i>
+                    </button>
+                    <button style={{ padding:'9px 12px', fontSize:'0.9rem', borderRadius:'var(--radius-sm)', border:'2px solid var(--red)', background:'var(--white)', color:'var(--red)', fontWeight:600, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 }} onClick={()=>setConfirmDelete(g)}>
+                      <i className="fa-solid fa-trash"></i>
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {modal && (
+        <Modal title={modal==='add' ? 'Créer un groupe' : 'Modifier le groupe'} onClose={()=>{ setModal(null); setForm({}); setErrors({}); }}>
+          <FormField label="Nom du groupe" required error={errors.nom}>
+            <input style={{ ...appStyles.input, borderColor: errors.nom ? 'var(--red)' : 'var(--border)' }} value={form.nom||''} onChange={e=>{ setForm(p=>({...p,nom:e.target.value})); setErrors(p=>({...p,nom:''})); }} placeholder="ex : Groupe A — Maths" />
+          </FormField>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+            <FormField label="Niveau" required error={errors.niveau}>
+              <select style={{ ...appStyles.input, borderColor: errors.niveau ? 'var(--red)' : 'var(--border)' }} value={form.niveau||''} onChange={e=>{ setForm(p=>({...p,niveau:e.target.value})); setErrors(p=>({...p,niveau:''})); }}>
+                <option value="">— Choisir —</option>
+                {["CE1","CE2","CM1","CM2","6e","5e","4e","3e"].map(n=><option key={n} value={n}>{n}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Type" required error={errors.type}>
+              <select style={{ ...appStyles.input, borderColor: errors.type ? 'var(--red)' : 'var(--border)' }} value={form.type||''} onChange={e=>{ setForm(p=>({...p,type:e.target.value})); setErrors(p=>({...p,type:''})); }}>
+                <option value="">— Choisir —</option>
+                {[{v:'niveau',l:'Par niveau'},{v:'mixte',l:'Mixte'},{v:'special',l:'Spécial'}].map(t=><option key={t.v} value={t.v}>{t.l}</option>)}
+              </select>
+            </FormField>
+          </div>
+          <FormField label="Description" hint="Quelques mots pour reconnaître ce groupe facilement.">
+            <textarea style={{ ...appStyles.input, resize:'vertical', minHeight:80 }} value={form.description||''} onChange={e=>setForm(p=>({...p,description:e.target.value}))} placeholder="ex : Cours du lundi et vendredi matin" />
+          </FormField>
+          <div style={{ display:'flex', gap:12, justifyContent:'flex-end', marginTop:8 }}>
+            <button style={appStyles.btnSecondary} onClick={()=>{ setModal(null); setForm({}); setErrors({}); }}>Annuler</button>
+            <button style={appStyles.btnPrimary} onClick={handleSave}><i className="fa-solid fa-floppy-disk"></i> Enregistrer</button>
+          </div>
+        </Modal>
+      )}
+
+      {confirmDelete && (
+        <Modal title="Confirmer l'archivage" onClose={()=>setConfirmDelete(null)}>
+          <AlertBox type="warning">
+            Voulez-vous vraiment archiver le groupe <strong>{confirmDelete.nom}</strong> ?<br />
+            Cette action est réversible depuis la base de données.
+          </AlertBox>
+          <div style={{ display:'flex', gap:12, marginTop:8, justifyContent:'flex-end' }}>
+            <button style={appStyles.btnSecondary} onClick={()=>setConfirmDelete(null)}>Annuler</button>
+            <button style={{ ...appStyles.btnPrimary, background:'var(--red)' }} onClick={()=>handleDelete(confirmDelete.id)}>
+              <i className="fa-solid fa-trash"></i> Confirmer
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function FicheGroupe({ groupe: initialGroupe, user, onBack, onUpdate, onDelete }) {
+  const [loading, setLoading] = React.useState(true);
+  const [groupe, setGroupe] = React.useState(null);
+  const [stats, setStats] = React.useState(null);
+  const [allEleves, setAllEleves] = React.useState([]);
+  const [editMode, setEditMode] = React.useState(false);
+  const [form, setForm] = React.useState({});
+  const [errors, setErrors] = React.useState({});
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [eleveSearch, setEleveSearch] = React.useState('');
+  const [selectedEleve, setSelectedEleve] = React.useState(null);
+  const [saved, setSaved] = React.useState(false);
+  const canEdit = user && (user.role === 'admin' || user.role === 'secretaire');
+
+  React.useEffect(() => { loadData(); }, [initialGroupe.id]);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [gData, sData, eData] = await Promise.all([
+        api(`/groupes/${initialGroupe.id}`),
+        api(`/groupes/${initialGroupe.id}/stats`),
+        api('/eleves?statut=actif')
+      ]);
+      setGroupe(gData);
+      setStats(sData);
+      setAllEleves(Array.isArray(eData) ? eData : []);
+    } catch (e) {
+      setGroupe(initialGroupe);
+      setAllEleves([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startEdit = () => {
+    setForm({ nom: groupe.nom, niveau: groupe.niveau || '', type: groupe.type || 'niveau', description: groupe.description || '' });
+    setErrors({});
+    setEditMode(true);
+  };
+
+  const validate = () => {
+    const err = {};
+    if (!form.nom?.trim()) err.nom = "Ce champ est obligatoire.";
+    if (!form.niveau?.trim()) err.niveau = "Choisissez un niveau.";
+    if (!form.type?.trim()) err.type = "Choisissez un type.";
+    return err;
+  };
+
+  const handleSave = async () => {
+    const err = validate();
+    if (Object.keys(err).length > 0) { setErrors(err); return; }
+    try {
+      const updated = await api(`/groupes/${groupe.id}`, { method: 'PUT', body: { nom: form.nom, niveau: form.niveau, type: form.type, description: form.description || null } });
+      setGroupe(prev => ({ ...prev, ...updated }));
+      setEditMode(false);
+      setSaved(true);
+      setTimeout(()=>setSaved(false), 3000);
+      if (onUpdate) onUpdate(updated);
+    } catch (e) {
+      alert(e.message || "Erreur lors de la sauvegarde.");
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await api(`/groupes/${groupe.id}`, { method: 'DELETE' });
+      if (onDelete) onDelete(groupe.id);
+      onBack();
+    } catch (e) {
+      alert(e.message || "Impossible d'archiver ce groupe.");
+    }
+    setConfirmDelete(false);
+  };
+
+  const handleAddEleve = async () => {
+    if (!selectedEleve) return;
+    try {
+      await api(`/groupes/${groupe.id}/eleves`, { method: 'POST', body: { eleve_id: selectedEleve.id } });
+      const updated = await api(`/groupes/${groupe.id}`);
+      setGroupe(updated);
+      setSelectedEleve(null);
+      setEleveSearch('');
+    } catch (e) {
+      alert(e.message || "Impossible d'ajouter cet élève.");
+    }
+  };
+
+  const handleRemoveEleve = async (eleveId) => {
+    if (!confirm("Retirer cet élève du groupe ?")) return;
+    try {
+      await api(`/groupes/${groupe.id}/eleves/${eleveId}`, { method: 'DELETE' });
+      const updated = await api(`/groupes/${groupe.id}`);
+      setGroupe(updated);
+    } catch (e) {
+      alert(e.message || "Impossible de retirer cet élève.");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={{ textAlign:'center', padding:40 }}>
+        <i className="fa-solid fa-spinner fa-spin" style={{ fontSize:'2rem', color:'var(--navy)' }}></i>
+        <p style={{ marginTop:12, color:'var(--text-muted)' }}>Chargement de la fiche…</p>
+      </div>
+    );
+  }
+
+  const groupeEleves = groupe?.eleves || [];
+  const groupeCours = groupe?.cours || [];
+  const tauxPresence = stats?.tauxPresence ? Math.round(stats.tauxPresence) : 0;
+
+  const filteredEleves = allEleves.filter(e => {
+    const alreadyIn = groupeEleves.some(ge => ge.id === e.id);
+    const search = (e.nom + ' ' + e.prenom).toLowerCase();
+    return !alreadyIn && search.includes(eleveSearch.toLowerCase());
+  });
+
+  return (
+    <div>
+      <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20, flexWrap:'wrap' }}>
+        <button style={appStyles.btnSecondary} onClick={onBack}>
+          <i className="fa-solid fa-arrow-left"></i> Retour à la liste
+        </button>
+        {canEdit && !editMode && (
+          <button style={appStyles.btnSecondary} onClick={startEdit}>
+            <i className="fa-solid fa-pen"></i> Modifier
+          </button>
+        )}
+        {canEdit && !editMode && (
+          <button style={{ ...appStyles.btnSecondary, borderColor:'var(--red)', color:'var(--red)' }} onClick={()=>setConfirmDelete(true)}>
+            <i className="fa-solid fa-trash"></i> Archiver
+          </button>
+        )}
+      </div>
+
+      {saved && <AlertBox type="success">Modifications enregistrées avec succès.</AlertBox>}
+
+      <div style={appStyles.card}>
+        <div style={{ display:'flex', alignItems:'flex-start', gap:20, flexWrap:'wrap' }}>
+          <div style={{ width:72, height:72, borderRadius:'50%', background:'var(--navy)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', flexShrink:0, fontFamily:'Lora, serif', fontSize:'1.6rem', fontWeight:700 }}>
+            <i className="fa-solid fa-users" style={{ fontSize:'1.8rem' }}></i>
+          </div>
+          <div style={{ flex:1 }}>
+            <h2 style={{ fontFamily:'Lora, serif', fontSize:'1.6rem', color:'var(--navy)' }}>{groupe.nom}</h2>
+            <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginTop:8 }}>
+              <span style={appStyles.badge('beige')}><i className="fa-solid fa-book-open"></i> {groupe.niveau || '—'}</span>
+              <span style={appStyles.badge('beige')}><i className="fa-solid fa-layer-group"></i> {groupe.type || 'niveau'}</span>
+              <span style={appStyles.badge('beige')}><i className="fa-solid fa-user-graduate"></i> {groupeEleves.length} élève{groupeEleves.length>1?'s':''}</span>
+              <span style={appStyles.badge('beige')}><i className="fa-solid fa-chart-pie"></i> Présence {tauxPresence}%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {editMode ? (
+        <div style={appStyles.card}>
+          <h3 style={appStyles.sectionTitle}>Modifier les informations</h3>
+          <FormField label="Nom" required error={errors.nom}>
+            <input style={{ ...appStyles.input, borderColor: errors.nom?'var(--red)':'var(--border)' }} value={form.nom||''} onChange={e=>{ setForm(p=>({...p,nom:e.target.value})); setErrors(p=>({...p,nom:''})); }} />
+          </FormField>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+            <FormField label="Niveau" required error={errors.niveau}>
+              <select style={{ ...appStyles.input, borderColor: errors.niveau?'var(--red)':'var(--border)' }} value={form.niveau||''} onChange={e=>{ setForm(p=>({...p,niveau:e.target.value})); setErrors(p=>({...p,niveau:''})); }}>
+                <option value="">— Choisir —</option>
+                {["CE1","CE2","CM1","CM2","6e","5e","4e","3e"].map(n=><option key={n} value={n}>{n}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Type" required error={errors.type}>
+              <select style={{ ...appStyles.input, borderColor: errors.type?'var(--red)':'var(--border)' }} value={form.type||''} onChange={e=>{ setForm(p=>({...p,type:e.target.value})); setErrors(p=>({...p,type:''})); }}>
+                <option value="">— Choisir —</option>
+                {[{v:'niveau',l:'Par niveau'},{v:'mixte',l:'Mixte'},{v:'special',l:'Spécial'}].map(t=><option key={t.v} value={t.v}>{t.l}</option>)}
+              </select>
+            </FormField>
+          </div>
+          <FormField label="Description">
+            <textarea style={{ ...appStyles.input, resize:'vertical', minHeight:80 }} value={form.description||''} onChange={e=>setForm(p=>({...p,description:e.target.value}))} placeholder="ex : Cours du lundi et vendredi matin" />
+          </FormField>
+          <div style={{ display:'flex', gap:12, marginTop:20, justifyContent:'flex-end' }}>
+            <button style={appStyles.btnSecondary} onClick={()=>{ setEditMode(false); setErrors({}); }}>Annuler</button>
+            <button style={appStyles.btnPrimary} onClick={handleSave}><i className="fa-solid fa-floppy-disk"></i> Enregistrer</button>
+          </div>
+        </div>
+      ) : (
+        <div style={appStyles.card}>
+          <h3 style={appStyles.sectionTitle}>Informations</h3>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:12 }}>
+            {[ ["Nom", groupe.nom, "users"], ["Niveau", groupe.niveau || '—', "book-open"], ["Type", groupe.type || 'niveau', "layer-group"], ["Description", groupe.description || '—', "align-left"] ].map(([k,v,ico])=>(
+              <div key={k} style={{ display:'flex', flexDirection:'column', gap:4, padding:'10px 14px', background:'var(--beige)', borderRadius:'var(--radius-sm)' }}>
+                <span style={{ color:'var(--text-muted)', fontSize:'0.85rem', display:'flex', alignItems:'center', gap:6 }}>
+                  <i className={`fa-solid fa-${ico}`} style={{ width:14 }}></i>{k}
+                </span>
+                <span style={{ fontWeight:600, fontSize:'1rem' }}>{v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))', gap:16, marginTop:16 }}>
+        {/* ÉLÈVES DU GROUPE */}
+        <div style={{ ...appStyles.card, gridColumn: groupeCours.length===0 ? '1 / -1' : undefined }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, flexWrap:'wrap', gap:10 }}>
+            <h3 style={appStyles.sectionTitle}>Élèves du groupe ({groupeEleves.length})</h3>
+          </div>
+
+          {canEdit && (
+            <div style={{ marginBottom:16 }}>
+              <div style={{ position:'relative', marginBottom:8 }}>
+                <i className="fa-solid fa-magnifying-glass" style={{ position:'absolute', left:14, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', pointerEvents:'none' }}></i>
+                <input style={{ ...appStyles.input, paddingLeft:42 }} value={eleveSearch} onChange={e=>{ setEleveSearch(e.target.value); setSelectedEleve(null); }} placeholder="Rechercher un élève à ajouter…" />
+              </div>
+              {eleveSearch && (
+                <div style={{ maxHeight:160, overflowY:'auto', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)', background:'var(--white)' }}>
+                  {filteredEleves.length === 0 ? (
+                    <div style={{ padding:'10px 14px', color:'var(--text-muted)', fontSize:'0.9rem' }}>Aucun élève trouvé.</div>
+                  ) : (
+                    filteredEleves.map(e => (
+                      <button key={e.id} onClick={()=>{ setSelectedEleve(e); setEleveSearch(e.prenom + ' ' + e.nom); }}
+                        style={{ display:'block', width:'100%', textAlign:'left', padding:'10px 14px', border:'none', borderBottom:'1px solid var(--border)', background:'transparent', cursor:'pointer', fontSize:'0.95rem', color:'var(--text)' }}
+                        onMouseEnter={ev=>ev.currentTarget.style.background='var(--beige)'}
+                        onMouseLeave={ev=>ev.currentTarget.style.background='transparent'}>
+                        {e.prenom} {e.nom} <span style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>· {e.niveau_scolaire || '—'}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+              {selectedEleve && (
+                <button style={{ ...appStyles.btnSuccess, marginTop:8, padding:'9px 16px', fontSize:'0.9rem' }} onClick={handleAddEleve}>
+                  <i className="fa-solid fa-plus"></i> Ajouter {selectedEleve.prenom} {selectedEleve.nom}
+                </button>
+              )}
+            </div>
+          )}
+
+          {groupeEleves.length === 0 ? (
+            <AlertBox type="info">Aucun élève dans ce groupe.</AlertBox>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              {groupeEleves.map(e => (
+                <div key={e.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:10, borderBottom:'1px solid var(--border)' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                    <div style={{ width:36, height:36, borderRadius:'50%', background:'var(--navy)', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:'0.85rem' }}>
+                      {e.prenom?.[0]}{e.nom?.[0]}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight:600, fontSize:'0.95rem' }}>{e.prenom} {e.nom}</div>
+                      <div style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>{e.niveau_scolaire || '—'}</div>
+                    </div>
+                  </div>
+                  {canEdit && (
+                    <button style={{ background:'none', border:'none', color:'var(--red)', cursor:'pointer', fontSize:'1rem', padding:'4px 8px' }} onClick={()=>handleRemoveEleve(e.id)} title="Retirer du groupe">
+                      <i className="fa-solid fa-xmark"></i>
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* COURS ASSOCIÉS */}
+        {groupeCours.length > 0 && (
+          <div style={appStyles.card}>
+            <h3 style={appStyles.sectionTitle}>Cours associés ({groupeCours.length})</h3>
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              {groupeCours.map(c => (
+                <div key={c.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:10, borderBottom:'1px solid var(--border)' }}>
+                  <div>
+                    <div style={{ fontWeight:600, fontSize:'0.95rem' }}>{c.matiere}</div>
+                    <div style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>{c.jour_semaine !== undefined ? ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'][c.jour_semaine] : '—'} · {c.heure_debut || '—'} – {c.heure_fin || '—'} · {c.salle || '—'}</div>
+                  </div>
+                  <span style={appStyles.badge('beige')}><i className="fa-solid fa-chalkboard-user"></i> {c.titre || '—'}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {confirmDelete && (
+        <Modal title="Confirmer l'archivage" onClose={()=>setConfirmDelete(false)}>
+          <AlertBox type="warning">
+            Voulez-vous vraiment archiver le groupe <strong>{groupe.nom}</strong> ?<br />
+            Cette action est réversible depuis la base de données.
+          </AlertBox>
+          <div style={{ display:'flex', gap:12, marginTop:8, justifyContent:'flex-end' }}>
+            <button style={appStyles.btnSecondary} onClick={()=>setConfirmDelete(false)}>Annuler</button>
+            <button style={{ ...appStyles.btnPrimary, background:'var(--red)' }} onClick={handleDelete}>
+              <i className="fa-solid fa-trash"></i> Confirmer
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─── COURS ─────────────────────────────────────────────────────────────────
+function CoursScreen({ user }) {
+  const jours = ["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"];
+  const [cours, setCours] = React.useState([]);
+  const [enseignants, setEnseignants] = React.useState([]);
+  const [groupes, setGroupes] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [view, setView] = React.useState('planning');
+  const [modal, setModal] = React.useState(null);
+  const [form, setForm] = React.useState({ groupe_ids: [] });
+  const [errors, setErrors] = React.useState({});
+  const [fiche, setFiche] = React.useState(null);
+  const [confirmDelete, setConfirmDelete] = React.useState(null);
+  const canEdit = user && (user.role === 'admin' || user.role === 'secretaire');
+
+  React.useEffect(() => { loadData(); }, []);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [cData, eData, gData] = await Promise.all([
+        api('/cours'),
+        api('/enseignants'),
+        api('/groupes')
+      ]);
+      setCours(Array.isArray(cData) ? cData : []);
+      setEnseignants(Array.isArray(eData) ? eData : []);
+      setGroupes(Array.isArray(gData) ? gData : []);
+    } catch (e) {
+      setCours([]); setEnseignants([]); setGroupes([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const validate = () => {
+    const err = {};
+    if (!form.matiere?.trim()) err.matiere = "Ce champ est obligatoire.";
+    if (!form.jour_semaine && form.jour_semaine !== 0) err.jour_semaine = "Choisissez un jour.";
+    if (!form.heure_debut?.trim()) err.heure_debut = "Saisissez l'heure de début.";
+    return err;
+  };
+
+  const handleSave = async () => {
+    const err = validate();
+    if (Object.keys(err).length > 0) { setErrors(err); return; }
+    try {
+      const payload = {
+        matiere: form.matiere, titre: form.titre || null, description: form.description || null,
+        enseignant_id: form.enseignant_id || null, salle: form.salle || null,
+        heure_debut: form.heure_debut || null, heure_fin: form.heure_fin || null,
+        jour_semaine: form.jour_semaine !== undefined ? form.jour_semaine : null,
+        recurrence: form.recurrence || 'ponctuel',
+        groupe_ids: form.groupe_ids || [],
+        date_debut: form.date_debut || null, date_fin: form.date_fin || null
+      };
+      if (modal === 'add') {
+        const created = await api('/cours', { method: 'POST', body: payload });
+        setCours(prev => [...prev, created]);
+      } else {
+        const updated = await api(`/cours/${form.id}`, { method: 'PUT', body: payload });
+        setCours(prev => prev.map(c => c.id === updated.id ? updated : c));
+      }
+    } catch (e) {
+      alert(e.message || "Erreur lors de la sauvegarde.");
+    }
+    setModal(null); setForm({ groupe_ids: [] }); setErrors({});
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await api(`/cours/${id}`, { method: 'DELETE' });
+      setCours(prev => prev.filter(c => c.id !== id));
+    } catch (e) {
+      alert(e.message || "Impossible d'archiver ce cours.");
+    }
+    setConfirmDelete(null);
+  };
+
+  const openAdd = () => { setForm({ recurrence: 'hebdomadaire', groupe_ids: [] }); setErrors({}); setModal('add'); };
+  const openEdit = (c) => { setForm({ ...c, groupe_ids: (c.groupes || []).map(g=>g.id) }); setErrors({}); setModal('edit'); };
+  const toggleGroupe = (gid) => {
+    setForm(p => {
+      const ids = p.groupe_ids || [];
+      return { ...p, groupe_ids: ids.includes(gid) ? ids.filter(id=>id!==gid) : [...ids, gid] };
+    });
+  };
+
+  const formatHeure = (h) => h ? h.slice(0,5) : '—';
+  const jourLabel = (js) => js !== undefined && js !== null ? jours[js] : '—';
+
+  const coursParJour = jours.map((jour, idx) => cours.filter(c => c.jour_semaine === idx).sort((a,b) => (a.heure_debut||'').localeCompare(b.heure_debut||'')));
+
+  if (fiche) return <FicheCours cours={fiche} user={user} onBack={()=>setFiche(null)} onUpdate={(u)=>setCours(prev=>prev.map(c=>c.id===u.id?u:c))} onDelete={(id)=>setCours(prev=>prev.filter(c=>c.id!==id))} />;
+
+  return (
+    <div>
+      <PageHeader title="Cours & Planning"
+        action={
+          <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+            <div style={{ display:'flex', background:'var(--beige-dark)', borderRadius:'var(--radius-sm)', padding:3 }}>
+              <button onClick={()=>setView('planning')} style={{ padding:'8px 16px', borderRadius:'var(--radius-sm)', border:'none', fontWeight:600, fontSize:'0.9rem', cursor:'pointer', background: view==='planning'?'var(--white)':'transparent', color: view==='planning'?'var(--navy)':'var(--text-muted)', boxShadow: view==='planning'?'var(--shadow)':'none' }}>
+                <i className="fa-solid fa-table-columns"></i> Planning
+              </button>
+              <button onClick={()=>setView('liste')} style={{ padding:'8px 16px', borderRadius:'var(--radius-sm)', border:'none', fontWeight:600, fontSize:'0.9rem', cursor:'pointer', background: view==='liste'?'var(--white)':'transparent', color: view==='liste'?'var(--navy)':'var(--text-muted)', boxShadow: view==='liste'?'var(--shadow)':'none' }}>
+                <i className="fa-solid fa-list"></i> Liste
+              </button>
+            </div>
+            {canEdit && <button style={appStyles.btnPrimary} onClick={openAdd}><i className="fa-solid fa-plus"></i> Ajouter un cours</button>}
+          </div>
+        } />
+
+      {loading ? (
+        <div style={{ textAlign:'center', padding:40 }}>
+          <i className="fa-solid fa-spinner fa-spin" style={{ fontSize:'2rem', color:'var(--navy)' }}></i>
+          <p style={{ marginTop:12, color:'var(--text-muted)' }}>Chargement…</p>
+        </div>
+      ) : cours.length === 0 ? (
+        <AlertBox type="info">Aucun cours trouvé.</AlertBox>
+      ) : view === 'planning' ? (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))', gap:14 }}>
+          {jours.map((jour, idx) => (
+            <div key={jour} style={{ ...appStyles.card, padding:0, overflow:'hidden' }}>
+              <div style={{ background:'var(--navy)', color:'#fff', padding:'12px 16px', fontFamily:'Lora, serif', fontWeight:700, fontSize:'1rem' }}>{jour}</div>
+              {coursParJour[idx].length === 0 ? (
+                <div style={{ padding:'16px', color:'var(--text-muted)', fontSize:'0.9rem', fontStyle:'italic' }}>Aucun cours</div>
+              ) : (
+                coursParJour[idx].map(c => (
+                  <div key={c.id} style={{ padding:'14px 16px', borderBottom:'1px solid var(--border)', cursor:'pointer', transition:'background 0.15s' }}
+                       onMouseEnter={e=>e.currentTarget.style.background='var(--beige)'}
+                       onMouseLeave={e=>e.currentTarget.style.background='var(--white)'}
+                       onClick={()=>setFiche(c)}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8 }}>
+                      <div style={{ fontWeight:700, color:'var(--text)', marginBottom:2 }}>{c.matiere}</div>
+                      {canEdit && (
+                        <div style={{ display:'flex', gap:4 }} onClick={e=>e.stopPropagation()}>
+                          <button style={{ background:'none', border:'none', color:'var(--navy)', cursor:'pointer', fontSize:'0.85rem', padding:'2px 4px' }} onClick={()=>openEdit(c)}><i className="fa-solid fa-pen"></i></button>
+                          <button style={{ background:'none', border:'none', color:'var(--red)', cursor:'pointer', fontSize:'0.85rem', padding:'2px 4px' }} onClick={()=>setConfirmDelete(c)}><i className="fa-solid fa-trash"></i></button>
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>{formatHeure(c.heure_debut)} – {formatHeure(c.heure_fin)}</div>
+                    <div style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>{c.titre || '—'}</div>
+                    <div style={{ marginTop:8, display:'flex', gap:6, flexWrap:'wrap' }}>
+                      <span style={appStyles.badge('beige')}><i className="fa-solid fa-door-open"></i> {c.salle || '—'}</span>
+                      <span style={appStyles.badge('beige')}><i className="fa-solid fa-chalkboard-user"></i> {c.enseignant_prenom || ''} {c.enseignant_nom || '—'}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ ...appStyles.card, padding:0, overflowX:'auto' }}>
+          <table style={appStyles.table}>
+            <thead>
+              <tr>
+                <th style={appStyles.th}>Matière</th>
+                <th style={appStyles.th}>Titre</th>
+                <th style={appStyles.th}>Jour</th>
+                <th style={appStyles.th}>Horaire</th>
+                <th style={appStyles.th}>Salle</th>
+                <th style={appStyles.th}>Enseignant</th>
+                <th style={appStyles.th}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cours.sort((a,b)=> (a.jour_semaine||0)-(b.jour_semaine||0) || (a.heure_debut||'').localeCompare(b.heure_debut||'')).map(c => (
+                <tr key={c.id}
+                    onMouseEnter={e=>e.currentTarget.style.background='var(--beige)'}
+                    onMouseLeave={e=>e.currentTarget.style.background='var(--white)'}
+                    onClick={()=>setFiche(c)} style={{ cursor:'pointer' }}>
+                  <td style={appStyles.td}><strong>{c.matiere}</strong></td>
+                  <td style={appStyles.td}>{c.titre || '—'}</td>
+                  <td style={appStyles.td}>{jourLabel(c.jour_semaine)}</td>
+                  <td style={appStyles.td}>{formatHeure(c.heure_debut)} – {formatHeure(c.heure_fin)}</td>
+                  <td style={appStyles.td}>{c.salle || '—'}</td>
+                  <td style={appStyles.td}>{c.enseignant_prenom || ''} {c.enseignant_nom || '—'}</td>
+                  <td style={appStyles.td}>
+                    <div style={{ display:'flex', gap:8 }} onClick={e=>e.stopPropagation()}>
+                      {canEdit && (
+                        <button style={{ ...appStyles.btnSecondary, padding:'7px 14px', fontSize:'0.88rem' }} onClick={()=>openEdit(c)}><i className="fa-solid fa-pen"></i></button>
+                      )}
+                      {canEdit && (
+                        <button style={{ padding:'7px 14px', fontSize:'0.88rem', borderRadius:'var(--radius-sm)', border:'2px solid var(--red)', background:'var(--white)', color:'var(--red)', fontWeight:600, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 }} onClick={()=>setConfirmDelete(c)}>
+                          <i className="fa-solid fa-trash"></i>
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {modal && (
+        <Modal title={modal==='add' ? 'Ajouter un cours' : 'Modifier le cours'} onClose={()=>{ setModal(null); setForm({ groupe_ids: [] }); setErrors({}); }}>
+          <FormField label="Matière" required error={errors.matiere}>
+            <input style={{ ...appStyles.input, borderColor: errors.matiere ? 'var(--red)' : 'var(--border)' }} value={form.matiere||''} onChange={e=>{ setForm(p=>({...p,matiere:e.target.value})); setErrors(p=>({...p,matiere:''})); }} placeholder="ex : Mathématiques" />
+          </FormField>
+          <FormField label="Titre">
+            <input style={appStyles.input} value={form.titre||''} onChange={e=>setForm(p=>({...p,titre:e.target.value}))} placeholder="ex : Maths CP - Lundi" />
+          </FormField>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+            <FormField label="Jour" required error={errors.jour_semaine}>
+              <select style={{ ...appStyles.input, borderColor: errors.jour_semaine ? 'var(--red)' : 'var(--border)' }} value={form.jour_semaine !== undefined ? form.jour_semaine : ''} onChange={e=>{ setForm(p=>({...p,jour_semaine:+e.target.value})); setErrors(p=>({...p,jour_semaine:''})); }}>
+                <option value="">— Choisir —</option>
+                {jours.map((j,idx)=><option key={idx} value={idx}>{j}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Récurrence">
+              <select style={appStyles.input} value={form.recurrence||'hebdomadaire'} onChange={e=>setForm(p=>({...p,recurrence:e.target.value}))}>
+                {[{v:'ponctuel',l:'Ponctuel'},{v:'hebdomadaire',l:'Hebdomadaire'},{v:'bimensuel',l:'Bimensuel'},{v:'mensuel',l:'Mensuel'}].map(r=><option key={r.v} value={r.v}>{r.l}</option>)}
+              </select>
+            </FormField>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+            <FormField label="Heure début" required error={errors.heure_debut}>
+              <input type="time" style={{ ...appStyles.input, borderColor: errors.heure_debut ? 'var(--red)' : 'var(--border)' }} value={form.heure_debut||''} onChange={e=>{ setForm(p=>({...p,heure_debut:e.target.value})); setErrors(p=>({...p,heure_debut:''})); }} />
+            </FormField>
+            <FormField label="Heure fin">
+              <input type="time" style={appStyles.input} value={form.heure_fin||''} onChange={e=>setForm(p=>({...p,heure_fin:e.target.value}))} />
+            </FormField>
+          </div>
+          <FormField label="Enseignant">
+            <select style={appStyles.input} value={form.enseignant_id||''} onChange={e=>setForm(p=>({...p,enseignant_id:e.target.value?+e.target.value:null}))}>
+              <option value="">— Pas encore assigné —</option>
+              {enseignants.map(e=><option key={e.id} value={e.id}>{e.prenom} {e.nom}</option>)}
+            </select>
+          </FormField>
+          <FormField label="Salle">
+            <input style={appStyles.input} value={form.salle||''} onChange={e=>setForm(p=>({...p,salle:e.target.value}))} placeholder="ex : Salle A" />
+          </FormField>
+          <FormField label="Groupes associés">
+            <div style={{ display:'flex', flexDirection:'column', gap:8, marginTop:4 }}>
+              {groupes.map(g => (
+                <label key={g.id} style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer', fontSize:'0.95rem', padding:'6px 10px', borderRadius:'var(--radius-sm)', background: (form.groupe_ids||[]).includes(g.id)?'var(--green-light)':'transparent', transition:'background 0.15s' }}>
+                  <input type="checkbox" checked={(form.groupe_ids||[]).includes(g.id)} onChange={()=>toggleGroupe(g.id)} />
+                  <span>{g.nom} <span style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>({g.niveau})</span></span>
+                </label>
+              ))}
+            </div>
+          </FormField>
+          <FormField label="Description" hint="Détails ou consignes particulières.">
+            <textarea style={{ ...appStyles.input, resize:'vertical', minHeight:80 }} value={form.description||''} onChange={e=>setForm(p=>({...p,description:e.target.value}))} placeholder="ex : Apporter le cahier d'exercices." />
+          </FormField>
+          <div style={{ display:'flex', gap:12, justifyContent:'flex-end', marginTop:8 }}>
+            <button style={appStyles.btnSecondary} onClick={()=>{ setModal(null); setForm({ groupe_ids: [] }); setErrors({}); }}>Annuler</button>
+            <button style={appStyles.btnPrimary} onClick={handleSave}><i className="fa-solid fa-floppy-disk"></i> Enregistrer</button>
+          </div>
+        </Modal>
+      )}
+
+      {confirmDelete && (
+        <Modal title="Confirmer l'archivage" onClose={()=>setConfirmDelete(null)}>
+          <AlertBox type="warning">
+            Voulez-vous vraiment archiver le cours <strong>{confirmDelete.matiere}</strong> ?<br />
+            Cette action est réversible depuis la base de données.
+          </AlertBox>
+          <div style={{ display:'flex', gap:12, marginTop:8, justifyContent:'flex-end' }}>
+            <button style={appStyles.btnSecondary} onClick={()=>setConfirmDelete(null)}>Annuler</button>
+            <button style={{ ...appStyles.btnPrimary, background:'var(--red)' }} onClick={()=>handleDelete(confirmDelete.id)}>
+              <i className="fa-solid fa-trash"></i> Confirmer
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function FicheCours({ cours: initialCours, user, onBack, onUpdate, onDelete }) {
+  const [loading, setLoading] = React.useState(true);
+  const [cours, setCours] = React.useState(null);
+  const [editMode, setEditMode] = React.useState(false);
+  const [form, setForm] = React.useState({});
+  const [errors, setErrors] = React.useState({});
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [saved, setSaved] = React.useState(false);
+  const [enseignants, setEnseignants] = React.useState([]);
+  const [groupes, setGroupes] = React.useState([]);
+  const canEdit = user && (user.role === 'admin' || user.role === 'secretaire');
+  const jours = ["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"];
+
+  React.useEffect(() => { loadData(); }, [initialCours.id]);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [cData, eData, gData] = await Promise.all([
+        api(`/cours/${initialCours.id}`),
+        api('/enseignants'),
+        api('/groupes')
+      ]);
+      setCours(cData);
+      setEnseignants(Array.isArray(eData) ? eData : []);
+      setGroupes(Array.isArray(gData) ? gData : []);
+    } catch (e) {
+      setCours(initialCours);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startEdit = () => {
+    setForm({
+      matiere: cours.matiere, titre: cours.titre || '', description: cours.description || '',
+      enseignant_id: cours.enseignant_id || '', salle: cours.salle || '',
+      heure_debut: cours.heure_debut || '', heure_fin: cours.heure_fin || '',
+      jour_semaine: cours.jour_semaine !== undefined ? cours.jour_semaine : '',
+      recurrence: cours.recurrence || 'hebdomadaire',
+      groupe_ids: (cours.groupes || []).map(g => g.id),
+      date_debut: cours.date_debut || '', date_fin: cours.date_fin || ''
+    });
+    setErrors({});
+    setEditMode(true);
+  };
+
+  const validate = () => {
+    const err = {};
+    if (!form.matiere?.trim()) err.matiere = "Ce champ est obligatoire.";
+    if (!form.jour_semaine && form.jour_semaine !== 0) err.jour_semaine = "Choisissez un jour.";
+    if (!form.heure_debut?.trim()) err.heure_debut = "Saisissez l'heure de début.";
+    return err;
+  };
+
+  const handleSave = async () => {
+    const err = validate();
+    if (Object.keys(err).length > 0) { setErrors(err); return; }
+    try {
+      const updated = await api(`/cours/${cours.id}`, { method: 'PUT', body: {
+        matiere: form.matiere, titre: form.titre || null, description: form.description || null,
+        enseignant_id: form.enseignant_id ? +form.enseignant_id : null,
+        salle: form.salle || null, heure_debut: form.heure_debut || null, heure_fin: form.heure_fin || null,
+        jour_semaine: form.jour_semaine !== '' ? +form.jour_semaine : null,
+        recurrence: form.recurrence || 'ponctuel',
+        groupe_ids: form.groupe_ids || [],
+        date_debut: form.date_debut || null, date_fin: form.date_fin || null
+      }});
+      setCours(prev => ({ ...prev, ...updated }));
+      setEditMode(false);
+      setSaved(true);
+      setTimeout(()=>setSaved(false), 3000);
+      if (onUpdate) onUpdate(updated);
+    } catch (e) {
+      alert(e.message || "Erreur lors de la sauvegarde.");
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await api(`/cours/${cours.id}`, { method: 'DELETE' });
+      if (onDelete) onDelete(cours.id);
+      onBack();
+    } catch (e) {
+      alert(e.message || "Impossible d'archiver ce cours.");
+    }
+    setConfirmDelete(false);
+  };
+
+  const toggleGroupe = (gid) => {
+    setForm(p => {
+      const ids = p.groupe_ids || [];
+      return { ...p, groupe_ids: ids.includes(gid) ? ids.filter(id=>id!==gid) : [...ids, gid] };
+    });
+  };
+
+  const formatHeure = (h) => h ? h.slice(0,5) : '—';
+  const jourLabel = (js) => js !== undefined && js !== null ? jours[js] : '—';
+  const recLabel = (r) => ({ ponctuel:'Ponctuel', hebdomadaire:'Hebdomadaire', bimensuel:'Bimensuel', mensuel:'Mensuel' }[r] || r);
+
+  if (loading) {
+    return (
+      <div style={{ textAlign:'center', padding:40 }}>
+        <i className="fa-solid fa-spinner fa-spin" style={{ fontSize:'2rem', color:'var(--navy)' }}></i>
+        <p style={{ marginTop:12, color:'var(--text-muted)' }}>Chargement de la fiche…</p>
+      </div>
+    );
+  }
+
+  const coursGroupes = cours?.groupes || [];
+  const coursEleves = cours?.eleves || [];
+  const ens = cours.enseignant_id ? enseignants.find(e=>e.id===cours.enseignant_id) : null;
+
+  return (
+    <div>
+      <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20, flexWrap:'wrap' }}>
+        <button style={appStyles.btnSecondary} onClick={onBack}>
+          <i className="fa-solid fa-arrow-left"></i> Retour
+        </button>
+        {canEdit && !editMode && (
+          <button style={appStyles.btnSecondary} onClick={startEdit}>
+            <i className="fa-solid fa-pen"></i> Modifier
+          </button>
+        )}
+        {canEdit && !editMode && (
+          <button style={{ ...appStyles.btnSecondary, borderColor:'var(--red)', color:'var(--red)' }} onClick={()=>setConfirmDelete(true)}>
+            <i className="fa-solid fa-trash"></i> Archiver
+          </button>
+        )}
+      </div>
+
+      {saved && <AlertBox type="success">Modifications enregistrées avec succès.</AlertBox>}
+
+      <div style={appStyles.card}>
+        <div style={{ display:'flex', alignItems:'flex-start', gap:20, flexWrap:'wrap' }}>
+          <div style={{ width:72, height:72, borderRadius:'50%', background:'var(--navy)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', flexShrink:0, fontFamily:'Lora, serif', fontSize:'1.6rem', fontWeight:700 }}>
+            <i className="fa-solid fa-book-open" style={{ fontSize:'1.8rem' }}></i>
+          </div>
+          <div style={{ flex:1 }}>
+            <h2 style={{ fontFamily:'Lora, serif', fontSize:'1.6rem', color:'var(--navy)' }}>{cours.matiere}</h2>
+            <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginTop:8 }}>
+              <span style={appStyles.badge('beige')}><i className="fa-solid fa-calendar-day"></i> {jourLabel(cours.jour_semaine)}</span>
+              <span style={appStyles.badge('beige')}><i className="fa-solid fa-clock"></i> {formatHeure(cours.heure_debut)} – {formatHeure(cours.heure_fin)}</span>
+              <span style={appStyles.badge('beige')}><i className="fa-solid fa-door-open"></i> {cours.salle || '—'}</span>
+              <span style={appStyles.badge('beige')}><i className="fa-solid fa-chalkboard-user"></i> {ens ? (ens.prenom + ' ' + ens.nom) : 'Non assigné'}</span>
+              <span style={appStyles.badge('beige')}><i className="fa-solid fa-rotate"></i> {recLabel(cours.recurrence)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {editMode ? (
+        <div style={appStyles.card}>
+          <h3 style={appStyles.sectionTitle}>Modifier le cours</h3>
+          <FormField label="Matière" required error={errors.matiere}>
+            <input style={{ ...appStyles.input, borderColor: errors.matiere?'var(--red)':'var(--border)' }} value={form.matiere||''} onChange={e=>{ setForm(p=>({...p,matiere:e.target.value})); setErrors(p=>({...p,matiere:''})); }} />
+          </FormField>
+          <FormField label="Titre">
+            <input style={appStyles.input} value={form.titre||''} onChange={e=>setForm(p=>({...p,titre:e.target.value}))} placeholder="ex : Maths CP - Lundi" />
+          </FormField>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+            <FormField label="Jour" required error={errors.jour_semaine}>
+              <select style={{ ...appStyles.input, borderColor: errors.jour_semaine?'var(--red)':'var(--border)' }} value={form.jour_semaine} onChange={e=>{ setForm(p=>({...p,jour_semaine:+e.target.value})); setErrors(p=>({...p,jour_semaine:''})); }}>
+                <option value="">— Choisir —</option>
+                {jours.map((j,idx)=><option key={idx} value={idx}>{j}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Récurrence">
+              <select style={appStyles.input} value={form.recurrence||'hebdomadaire'} onChange={e=>setForm(p=>({...p,recurrence:e.target.value}))}>
+                {[{v:'ponctuel',l:'Ponctuel'},{v:'hebdomadaire',l:'Hebdomadaire'},{v:'bimensuel',l:'Bimensuel'},{v:'mensuel',l:'Mensuel'}].map(r=><option key={r.v} value={r.v}>{r.l}</option>)}
+              </select>
+            </FormField>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+            <FormField label="Heure début" required error={errors.heure_debut}>
+              <input type="time" style={{ ...appStyles.input, borderColor: errors.heure_debut?'var(--red)':'var(--border)' }} value={form.heure_debut||''} onChange={e=>{ setForm(p=>({...p,heure_debut:e.target.value})); setErrors(p=>({...p,heure_debut:''})); }} />
+            </FormField>
+            <FormField label="Heure fin">
+              <input type="time" style={appStyles.input} value={form.heure_fin||''} onChange={e=>setForm(p=>({...p,heure_fin:e.target.value}))} />
+            </FormField>
+          </div>
+          <FormField label="Enseignant">
+            <select style={appStyles.input} value={form.enseignant_id||''} onChange={e=>setForm(p=>({...p,enseignant_id:e.target.value}))}>
+              <option value="">— Pas encore assigné —</option>
+              {enseignants.map(e=><option key={e.id} value={e.id}>{e.prenom} {e.nom}</option>)}
+            </select>
+          </FormField>
+          <FormField label="Salle">
+            <input style={appStyles.input} value={form.salle||''} onChange={e=>setForm(p=>({...p,salle:e.target.value}))} placeholder="ex : Salle A" />
+          </FormField>
+          <FormField label="Groupes associés">
+            <div style={{ display:'flex', flexDirection:'column', gap:8, marginTop:4 }}>
+              {groupes.map(g => (
+                <label key={g.id} style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer', fontSize:'0.95rem', padding:'6px 10px', borderRadius:'var(--radius-sm)', background: (form.groupe_ids||[]).includes(g.id)?'var(--green-light)':'transparent', transition:'background 0.15s' }}>
+                  <input type="checkbox" checked={(form.groupe_ids||[]).includes(g.id)} onChange={()=>toggleGroupe(g.id)} />
+                  <span>{g.nom} <span style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>({g.niveau})</span></span>
+                </label>
+              ))}
+            </div>
+          </FormField>
+          <FormField label="Description">
+            <textarea style={{ ...appStyles.input, resize:'vertical', minHeight:80 }} value={form.description||''} onChange={e=>setForm(p=>({...p,description:e.target.value}))} />
+          </FormField>
+          <div style={{ display:'flex', gap:12, marginTop:20, justifyContent:'flex-end' }}>
+            <button style={appStyles.btnSecondary} onClick={()=>{ setEditMode(false); setErrors({}); }}>Annuler</button>
+            <button style={appStyles.btnPrimary} onClick={handleSave}><i className="fa-solid fa-floppy-disk"></i> Enregistrer</button>
+          </div>
+        </div>
+      ) : (
+        <div style={appStyles.card}>
+          <h3 style={appStyles.sectionTitle}>Informations</h3>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:12 }}>
+            {[ ["Matière", cours.matiere, "book-open"], ["Titre", cours.titre || '—', "heading"], ["Jour", jourLabel(cours.jour_semaine), "calendar-day"], ["Horaire", formatHeure(cours.heure_debut) + ' – ' + formatHeure(cours.heure_fin), "clock"], ["Salle", cours.salle || '—', "door-open"], ["Enseignant", ens ? (ens.prenom + ' ' + ens.nom) : 'Non assigné', "chalkboard-user"], ["Récurrence", recLabel(cours.recurrence), "rotate"], ["Description", cours.description || '—', "align-left"] ].map(([k,v,ico])=>(
+              <div key={k} style={{ display:'flex', flexDirection:'column', gap:4, padding:'10px 14px', background:'var(--beige)', borderRadius:'var(--radius-sm)' }}>
+                <span style={{ color:'var(--text-muted)', fontSize:'0.85rem', display:'flex', alignItems:'center', gap:6 }}>
+                  <i className={`fa-solid fa-${ico}`} style={{ width:14 }}></i>{k}
+                </span>
+                <span style={{ fontWeight:600, fontSize:'1rem' }}>{v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))', gap:16, marginTop:16 }}>
+        {/* GROUPES */}
+        <div style={appStyles.card}>
+          <h3 style={appStyles.sectionTitle}>Groupes associés ({coursGroupes.length})</h3>
+          {coursGroupes.length === 0 ? (
+            <AlertBox type="info">Aucun groupe associé à ce cours.</AlertBox>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              {coursGroupes.map(g => (
+                <div key={g.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:10, borderBottom:'1px solid var(--border)' }}>
+                  <div>
+                    <div style={{ fontWeight:600, fontSize:'0.95rem' }}>{g.nom}</div>
+                    <div style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>{g.niveau} · {g.type || 'niveau'}</div>
+                  </div>
+                  <span style={appStyles.badge('beige')}><i className="fa-solid fa-users"></i> {g.description || '—'}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ÉLÈVES INDIVIDUELS */}
+        {coursEleves.length > 0 && (
+          <div style={appStyles.card}>
+            <h3 style={appStyles.sectionTitle}>Élèves individuels ({coursEleves.length})</h3>
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              {coursEleves.map(e => (
+                <div key={e.id} style={{ display:'flex', alignItems:'center', gap:12, paddingBottom:10, borderBottom:'1px solid var(--border)' }}>
+                  <div style={{ width:36, height:36, borderRadius:'50%', background:'var(--navy)', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:'0.85rem' }}>
+                    {e.prenom?.[0]}{e.nom?.[0]}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight:600, fontSize:'0.95rem' }}>{e.prenom} {e.nom}</div>
+                    <div style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>{e.niveau_scolaire || '—'}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {confirmDelete && (
+        <Modal title="Confirmer l'archivage" onClose={()=>setConfirmDelete(false)}>
+          <AlertBox type="warning">
+            Voulez-vous vraiment archiver le cours <strong>{cours.matiere}</strong> ?<br />
+            Cette action est réversible depuis la base de données.
+          </AlertBox>
+          <div style={{ display:'flex', gap:12, marginTop:8, justifyContent:'flex-end' }}>
+            <button style={appStyles.btnSecondary} onClick={()=>setConfirmDelete(false)}>Annuler</button>
+            <button style={{ ...appStyles.btnPrimary, background:'var(--red)' }} onClick={handleDelete}>
+              <i className="fa-solid fa-trash"></i> Confirmer
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─── BULLETINS ─────────────────────────────────────────────────────────────
+function BulletinsScreen({ user }) {
+  const [eleves, setEleves] = React.useState([]);
+  const [search, setSearch] = React.useState('');
+  const [annee, setAnnee] = React.useState('2025-2026');
+  const [trimestre, setTrimestre] = React.useState(2);
+  const [selectedEleve, setSelectedEleve] = React.useState(null);
+  const [bulletin, setBulletin] = React.useState(null);
+  const [evolution, setEvolution] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [modal, setModal] = React.useState(null);
+  const [form, setForm] = React.useState({});
+  const [errors, setErrors] = React.useState({});
+  const [coursList, setCoursList] = React.useState([]);
+  const [coursForEleve, setCoursForEleve] = React.useState([]);
+  const [saved, setSaved] = React.useState(false);
+  const [eleveSearch, setEleveSearch] = React.useState('');
+  const [selectedNoteEleve, setSelectedNoteEleve] = React.useState(null);
+  const canEdit = user && (user.role === 'admin' || user.role === 'secretaire' || user.role === 'enseignant');
+  const canDeleteNote = user && (user.role === 'admin' || user.role === 'enseignant');
+
+  const currentYear = new Date().getFullYear();
+  const annees = Array.from({ length: 5 }, (_, i) => {
+    const y = currentYear - 2 + i;
+    return `${y}-${y + 1}`;
+  });
+
+  React.useEffect(() => { loadEleves(); loadCours(); }, []);
+
+  React.useEffect(() => {
+    if (selectedNoteEleve) {
+      api(`/eleves/${selectedNoteEleve.id}/cours`).then(data => {
+        setCoursForEleve(Array.isArray(data) ? data : []);
+      }).catch(() => setCoursForEleve([]));
+    } else {
+      setCoursForEleve([]);
+    }
+  }, [selectedNoteEleve]);
+
+  const loadEleves = async () => {
+    setLoading(true);
+    try {
+      const data = await api('/eleves?statut=actif');
+      setEleves(Array.isArray(data) ? data : []);
+    } catch (e) { setEleves([]); }
+    finally { setLoading(false); }
+  };
+
+  const loadCours = async () => {
+    try {
+      const data = await api('/cours');
+      setCoursList(Array.isArray(data) ? data : []);
+    } catch (e) { setCoursList([]); }
+  };
+
+  const loadBulletinRef = React.useRef(0);
+
+  const loadBulletin = async (el, a = annee, t = trimestre) => {
+    const reqId = ++loadBulletinRef.current;
+    setLoading(true);
+    try {
+      const [bData, eData] = await Promise.all([
+        api(`/notes/bulletin?eleve_id=${el.id}&annee_scolaire=${a}&trimestre=${t}`),
+        api(`/notes/evolution?eleve_id=${el.id}`)
+      ]);
+      if (reqId !== loadBulletinRef.current) return; // garde race condition
+      setBulletin(bData);
+      setEvolution(Array.isArray(eData) ? eData : []);
+    } catch (e) {
+      if (reqId !== loadBulletinRef.current) return;
+      setBulletin({ eleve: el, annee_scolaire: a, trimestre: t, notes: [], moyenne: null });
+      setEvolution([]);
+    } finally { if (reqId === loadBulletinRef.current) setLoading(false); }
+  };
+
+  const handleSelectEleve = (el) => {
+    setSelectedEleve(el);
+    loadBulletin(el);
+  };
+
+  const validate = () => {
+    const err = {};
+    if (!form.eleve_id) err.eleve_id = "Sélectionnez un élève.";
+    if (!form.cours_id) err.cours_id = "Sélectionnez un cours.";
+    const val = form.valeur;
+    if (val === undefined || val === '' || isNaN(val) || val < 0 || val > 20) err.valeur = "Saisissez une note entre 0 et 20.";
+    if (!form.trimestre) err.trimestre = "Choisissez un trimestre.";
+    if (!form.annee_scolaire?.trim()) err.annee_scolaire = "Saisissez l'année scolaire.";
+    return err;
+  };
+
+  const handleSave = async () => {
+    const err = validate();
+    if (Object.keys(err).length > 0) { setErrors(err); return; }
+    try {
+      const payload = {
+        eleve_id: +form.eleve_id, cours_id: +form.cours_id,
+        valeur: form.valeur !== '' ? +form.valeur : null,
+        appreciation: form.appreciation || null,
+        trimestre: +form.trimestre, annee_scolaire: form.annee_scolaire,
+        date_evaluation: form.date_evaluation || new Date().toISOString().split('T')[0]
+      };
+      if (modal === 'add') {
+        await api('/notes', { method: 'POST', body: payload });
+      } else {
+        await api(`/notes/${form.id}`, { method: 'PUT', body: payload });
+      }
+      setSaved(true); setTimeout(()=>setSaved(false), 4000);
+      if (selectedEleve) loadBulletin(selectedEleve);
+      setModal(null); setForm({}); setErrors({}); setEleveSearch(''); setSelectedNoteEleve(null);
+    } catch (e) {
+      alert(e.message || "Erreur lors de la sauvegarde.");
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm('Supprimer cette note ?')) return;
+    try {
+      await api(`/notes/${id}`, { method: 'DELETE' });
+      if (selectedEleve) loadBulletin(selectedEleve);
+    } catch (e) {
+      alert(e.message || "Impossible de supprimer.");
+    }
+  };
+
+  const openAdd = () => {
+    setForm({ trimestre, annee_scolaire: annee, date_evaluation: new Date().toISOString().split('T')[0], valeur: '' });
+    setErrors({}); setModal('add');
+  };
+
+  const openEdit = (n) => {
+    setForm({
+      id: n.id, eleve_id: n.eleve_id, cours_id: n.cours_id,
+      valeur: n.valeur ?? '', appreciation: n.appreciation || '',
+      trimestre: n.trimestre, annee_scolaire: n.annee_scolaire,
+      date_evaluation: n.date_evaluation || new Date().toISOString().split('T')[0]
+    });
+    const el = eleves.find(e=>e.id===n.eleve_id);
+    if (el) { setSelectedNoteEleve(el); setEleveSearch(`${el.prenom} ${el.nom}`); }
+    setErrors({}); setModal('edit');
+  };
+
+  const downloadPdf = async () => {
+    if (!selectedEleve) return;
+    let objectUrl = null;
+    try {
+      const token = localStorage.getItem('admisco_token');
+      const res = await fetch(`/api/notes/bulletin/pdf?eleve_id=${selectedEleve.id}&annee_scolaire=${annee}&trimestre=${trimestre}`, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (!res.ok) throw new Error('Erreur serveur');
+      const ct = res.headers.get('content-type');
+      if (!ct || !ct.includes('application/pdf')) throw new Error('Réponse invalide');
+      const blob = await res.blob();
+      objectUrl = URL.createObjectURL(blob);
+      window.open(objectUrl, '_blank');
+      setTimeout(() => { if (objectUrl) URL.revokeObjectURL(objectUrl); }, 60000);
+    } catch (e) { alert('Impossible de générer le PDF.'); if (objectUrl) URL.revokeObjectURL(objectUrl); }
+  };
+
+  const filteredEleves = eleves.filter(e => (e.nom + ' ' + e.prenom).toLowerCase().includes(search.toLowerCase()));
+  const elevesNotes = eleves.filter(e => (e.nom + ' ' + e.prenom).toLowerCase().includes(eleveSearch.toLowerCase()));
+
+  if (selectedEleve) {
+    return (
+      <div>
+        <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20, flexWrap:'wrap' }}>
+          <button style={appStyles.btnSecondary} onClick={()=>{ setSelectedEleve(null); setBulletin(null); }}>
+            <i className="fa-solid fa-arrow-left"></i> Retour
+          </button>
+          <button style={appStyles.btnSecondary} onClick={downloadPdf}>
+            <i className="fa-solid fa-file-pdf"></i> Télécharger PDF
+          </button>
+          {canEdit && (
+            <button style={appStyles.btnPrimary} onClick={openAdd}>
+              <i className="fa-solid fa-plus"></i> Ajouter une note
+            </button>
+          )}
+        </div>
+
+        {saved && <AlertBox type="success">Note enregistrée avec succès.</AlertBox>}
+
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:14, marginBottom:20 }}>
+          <FormField label="Année scolaire">
+            <select style={appStyles.input} value={annee} onChange={e=>{ const val = e.target.value; setAnnee(val); loadBulletin(selectedEleve, val, trimestre); }}>
+              {annees.map(a=><option key={a} value={a}>{a}</option>)}
+            </select>
+          </FormField>
+          <FormField label="Trimestre">
+            <select style={appStyles.input} value={trimestre} onChange={e=>{ const val = +e.target.value; setTrimestre(val); loadBulletin(selectedEleve, annee, val); }}>
+              {[1,2,3].map(t=><option key={t} value={t}>Trimestre {t}</option>)}
+            </select>
+          </FormField>
+        </div>
+
+        {loading ? (
+          <div style={{ textAlign:'center', padding:40 }}><i className="fa-solid fa-spinner fa-spin" style={{ fontSize:'2rem', color:'var(--navy)' }}></i></div>
+        ) : (
+          <>
+            <div style={appStyles.card}>
+              <div style={{ display:'flex', alignItems:'flex-start', gap:20, flexWrap:'wrap' }}>
+                <div style={{ width:72, height:72, borderRadius:'50%', background:'var(--navy)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', flexShrink:0, fontFamily:'Lora, serif', fontSize:'1.6rem', fontWeight:700 }}>
+                  {selectedEleve.prenom?.[0]}{selectedEleve.nom?.[0]}
+                </div>
+                <div style={{ flex:1 }}>
+                  <h2 style={{ fontFamily:'Lora, serif', fontSize:'1.6rem', color:'var(--navy)' }}>{selectedEleve.prenom} {selectedEleve.nom}</h2>
+                  <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginTop:8 }}>
+                    <span style={appStyles.badge('beige')}><i className="fa-solid fa-book-open"></i> {selectedEleve.niveau_scolaire || '—'}</span>
+                    <span style={appStyles.badge('beige')}><i className="fa-solid fa-calendar"></i> Année {bulletin?.annee_scolaire || annee}</span>
+                    <span style={appStyles.badge('beige')}><i className="fa-solid fa-layer-group"></i> Trimestre {bulletin?.trimestre || trimestre}</span>
+                    <span style={appStyles.badge(bulletin?.moyenne === null || bulletin?.moyenne === undefined ? 'beige' : (bulletin.moyenne >= 10 ? 'green' : 'orange'))}>
+                      <i className="fa-solid fa-chart-line"></i> Moyenne : {bulletin?.moyenne ?? '—'}/20
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))', gap:16, marginTop:16 }}>
+              <div style={appStyles.card}>
+                <h3 style={appStyles.sectionTitle}>Notes du trimestre ({bulletin?.notes?.length || 0})</h3>
+                {(bulletin?.notes?.length || 0) === 0 ? (
+                  <AlertBox type="info">Aucune note pour ce trimestre.</AlertBox>
+                ) : (
+                  <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                    {bulletin.notes.map(n => (
+                      <div key={n.id} style={{ paddingBottom:12, borderBottom:'1px solid var(--border)' }}>
+                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+                          <strong style={{ fontSize:'1.05rem' }}>{n.matiere}</strong>
+                          <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                            <span style={{ background:'var(--navy)', color:'#fff', borderRadius:'var(--radius-sm)', padding:'5px 14px', fontWeight:700, fontSize:'1.1rem' }}>{n.valeur !== null ? n.valeur + '/20' : '—'}</span>
+                            {canEdit && (
+                              <button style={{ background:'none', border:'none', color:'var(--navy)', cursor:'pointer', fontSize:'0.85rem' }} onClick={()=>openEdit(n)}><i className="fa-solid fa-pen"></i></button>
+                            )}
+                            {canDeleteNote && (
+                              <button style={{ background:'none', border:'none', color:'var(--red)', cursor:'pointer', fontSize:'0.85rem' }} onClick={()=>handleDelete(n.id)}><i className="fa-solid fa-trash"></i></button>
+                            )}
+                          </div>
+                        </div>
+                        <div style={{ color:'var(--text-muted)', fontSize:'0.9rem' }}>{n.cours_titre || '—'} · {formatDateFR(n.date_evaluation)}</div>
+                        {n.appreciation && <p style={{ color:'var(--text-muted)', fontSize:'0.95rem', fontStyle:'italic', marginTop:4 }}>"{n.appreciation}"</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div style={appStyles.card}>
+                <h3 style={appStyles.sectionTitle}>Évolution</h3>
+                {evolution.length === 0 ? (
+                  <AlertBox type="info">Aucune donnée d'évolution.</AlertBox>
+                ) : (
+                  <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                    {evolution.map((ev, i) => (
+                      <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:10, borderBottom:'1px solid var(--border)' }}>
+                        <div>
+                          <div style={{ fontWeight:600, fontSize:'0.95rem' }}>Année {ev.annee_scolaire} · Trimestre {ev.trimestre}</div>
+                        </div>
+                        <span style={{ background:'var(--navy)', color:'#fff', borderRadius:'var(--radius-sm)', padding:'4px 12px', fontWeight:700, fontSize:'1rem' }}>{Number(ev.moyenne).toFixed(2)}/20</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <PageHeader title="Bulletins de suivi"
+        action={canEdit && <button style={appStyles.btnPrimary} onClick={openAdd}><i className="fa-solid fa-pen"></i> Saisir des notes</button>} />
+
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:14, marginBottom:20 }}>
+        <FormField label="Année scolaire">
+          <select style={appStyles.input} value={annee} onChange={e=>setAnnee(e.target.value)}>
+            {annees.map(a=><option key={a} value={a}>{a}</option>)}
+          </select>
+        </FormField>
+        <FormField label="Trimestre">
+          <select style={appStyles.input} value={trimestre} onChange={e=>setTrimestre(+e.target.value)}>
+            {[1,2,3].map(t=><option key={t} value={t}>Trimestre {t}</option>)}
+          </select>
+        </FormField>
+        <FormField label="Rechercher un élève">
+          <div style={{ position:'relative' }}>
+            <i className="fa-solid fa-magnifying-glass" style={{ position:'absolute', left:14, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', pointerEvents:'none' }}></i>
+            <input style={{ ...appStyles.input, paddingLeft:42 }} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Nom, prénom…" />
+          </div>
+        </FormField>
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign:'center', padding:40 }}><i className="fa-solid fa-spinner fa-spin" style={{ fontSize:'2rem', color:'var(--navy)' }}></i></div>
+      ) : filteredEleves.length === 0 ? (
+        <AlertBox type="info">Aucun élève trouvé.</AlertBox>
+      ) : (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))', gap:14 }}>
+          {filteredEleves.map(e => (
+            <button key={e.id} onClick={()=>handleSelectEleve(e)}
+              style={{ ...appStyles.card, cursor:'pointer', textAlign:'left', border:'2px solid var(--border)', transition:'all 0.15s' }}
+              onMouseEnter={ev=>{ev.currentTarget.style.borderColor='var(--navy)';ev.currentTarget.style.boxShadow='var(--shadow-lg)';}}
+              onMouseLeave={ev=>{ev.currentTarget.style.borderColor='var(--border)';ev.currentTarget.style.boxShadow='var(--shadow)';}}>
+              <div style={{ display:'flex', gap:14, alignItems:'center' }}>
+                <div style={{ width:48, height:48, borderRadius:'50%', background:'var(--navy)', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, flexShrink:0, fontFamily:'Lora, serif', fontSize:'1.1rem' }}>
+                  {e.prenom?.[0]}{e.nom?.[0]}
+                </div>
+                <div>
+                  <div style={{ fontWeight:700 }}>{e.prenom} {e.nom}</div>
+                  <div style={{ color:'var(--text-muted)', fontSize:'0.88rem' }}>{e.niveau_scolaire || '—'}</div>
+                </div>
+              </div>
+              <div style={{ marginTop:14, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <span style={appStyles.badge('beige')}><i className="fa-solid fa-file-lines"></i> Voir le bulletin</span>
+                <i className="fa-solid fa-chevron-right" style={{ color:'var(--navy)' }}></i>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {modal && (
+        <Modal title={modal==='add' ? 'Saisir une note' : 'Modifier la note'} onClose={()=>{ setModal(null); setForm({}); setErrors({}); setEleveSearch(''); setSelectedNoteEleve(null); }}>
+          {modal==='add' && (
+            <FormField label="Élève" required error={errors.eleve_id}>
+              <div style={{ position:'relative' }}>
+                <i className="fa-solid fa-magnifying-glass" style={{ position:'absolute', left:14, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', pointerEvents:'none' }}></i>
+                <input style={{ ...appStyles.input, paddingLeft:42, borderColor: errors.eleve_id ? 'var(--red)' : 'var(--border)' }} value={selectedNoteEleve ? `${selectedNoteEleve.prenom} ${selectedNoteEleve.nom}` : eleveSearch} onChange={e=>{ setEleveSearch(e.target.value); setSelectedNoteEleve(null); setErrors(p=>({...p,eleve_id:''})); }} placeholder="Rechercher un élève…" />
+                {!selectedNoteEleve && eleveSearch && (
+                  <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, right:0, maxHeight:220, overflowY:'auto', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)', background:'var(--white)', zIndex:50, boxShadow:'var(--shadow-lg)' }}>
+                    {elevesNotes.length === 0 ? (
+                      <div style={{ padding:'12px 16px', color:'var(--text-muted)', fontSize:'0.9rem' }}>Aucun élève trouvé.</div>
+                    ) : (
+                      elevesNotes.map(el => (
+                        <button key={el.id} onClick={()=>{ setSelectedNoteEleve(el); setEleveSearch(`${el.prenom} ${el.nom}`); setForm(p=>({...p,eleve_id:el.id})); }}
+                          style={{ display:'block', width:'100%', textAlign:'left', padding:'12px 16px', border:'none', borderBottom:'1px solid var(--border)', background:'transparent', cursor:'pointer' }}
+                          onMouseEnter={ev=>ev.currentTarget.style.background='var(--beige)'}
+                          onMouseLeave={ev=>ev.currentTarget.style.background='transparent'}>
+                          {el.prenom} {el.nom} <span style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>· {el.niveau_scolaire || '—'}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            </FormField>
+          )}
+          <FormField label="Cours" required error={errors.cours_id}>
+            <select style={{ ...appStyles.input, borderColor: errors.cours_id ? 'var(--red)' : 'var(--border)' }} value={form.cours_id||''} onChange={e=>{ setForm(p=>({...p,cours_id:+e.target.value})); setErrors(p=>({...p,cours_id:''})); }}>
+              <option value="">— Choisir —</option>
+              {(modal === 'add' && selectedNoteEleve ? coursForEleve : coursList).map(c=><option key={c.id} value={c.id}>{c.matiere} {c.titre ? `— ${c.titre}` : ''}</option>)}
+            </select>
+          </FormField>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+            <FormField label="Note /20" required error={errors.valeur}>
+              <input type="number" min={0} max={20} step={0.5} style={{ ...appStyles.input, borderColor: errors.valeur ? 'var(--red)' : 'var(--border)' }} value={form.valeur} onChange={e=>{ setForm(p=>({...p,valeur:e.target.value===''?'':+e.target.value})); setErrors(p=>({...p,valeur:''})); }} />
+            </FormField>
+            <FormField label="Trimestre" required error={errors.trimestre}>
+              <select style={{ ...appStyles.input, borderColor: errors.trimestre ? 'var(--red)' : 'var(--border)' }} value={form.trimestre||''} onChange={e=>{ setForm(p=>({...p,trimestre:+e.target.value})); setErrors(p=>({...p,trimestre:''})); }}>
+                <option value="">— Choisir —</option>
+                {[1,2,3].map(t=><option key={t} value={t}>{t}</option>)}
+              </select>
+            </FormField>
+          </div>
+          <FormField label="Année scolaire" required error={errors.annee_scolaire}>
+            <select style={{ ...appStyles.input, borderColor: errors.annee_scolaire ? 'var(--red)' : 'var(--border)' }} value={form.annee_scolaire||''} onChange={e=>{ setForm(p=>({...p,annee_scolaire:e.target.value})); setErrors(p=>({...p,annee_scolaire:''})); }}>
+              <option value="">— Choisir —</option>
+              {annees.map(a=><option key={a} value={a}>{a}</option>)}
+            </select>
+          </FormField>
+          <FormField label="Date d'évaluation">
+            <input type="date" style={appStyles.input} value={form.date_evaluation||''} onChange={e=>setForm(p=>({...p,date_evaluation:e.target.value}))} />
+          </FormField>
+          <FormField label="Appréciation">
+            <textarea style={{ ...appStyles.input, resize:'vertical', minHeight:80 }} value={form.appreciation||''} onChange={e=>setForm(p=>({...p,appreciation:e.target.value}))} placeholder="Appréciation sur le travail de l'élève…" />
+          </FormField>
+          <div style={{ display:'flex', gap:12, justifyContent:'flex-end', marginTop:8 }}>
+            <button style={appStyles.btnSecondary} onClick={()=>{ setModal(null); setForm({}); setErrors({}); setEleveSearch(''); setSelectedNoteEleve(null); }}>Annuler</button>
+            <button style={appStyles.btnPrimary} onClick={handleSave}><i className="fa-solid fa-floppy-disk"></i> Enregistrer</button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─── ENSEIGNANTS ───────────────────────────────────────────────────────────
+function EnseignantsScreen() {
+  const enseignants = [
+    { id:1, nom:"M. Bernard",  matieres:"Mathématiques", tel:"06 11 22 33 44", cours:2 },
+    { id:2, nom:"Mme Dupont",  matieres:"Français",      tel:"07 22 33 44 55", cours:2 },
+    { id:3, nom:"Mme Martin",  matieres:"Anglais",       tel:"06 33 44 55 66", cours:1 },
+  ];
+
+  return (
+    <div>
+      <PageHeader title="Enseignants"
+        action={<button style={appStyles.btnPrimary}><i className="fa-solid fa-plus"></i> Ajouter un enseignant</button>} />
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))", gap:16 }}>
+        {enseignants.map(e => (
+          <div key={e.id} style={appStyles.card}>
+            <div style={{ display:"flex", gap:14, alignItems:"center", marginBottom:16 }}>
+              <div style={{ width:52, height:52, borderRadius:"50%", background:"var(--navy)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                <i className="fa-solid fa-chalkboard-user" style={{ fontSize:"1.3rem" }}></i>
+              </div>
+              <div>
+                <div style={{ fontFamily:"Lora, serif", fontWeight:700, fontSize:"1.1rem", color:"var(--navy)" }}>{e.nom}</div>
+                <div style={{ color:"var(--text-muted)", fontSize:"0.88rem" }}>{e.matieres}</div>
+              </div>
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:16 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:"0.92rem" }}>
+                <span style={{ color:"var(--text-muted)", display:"flex", alignItems:"center", gap:6 }}><i className="fa-solid fa-phone" style={{ width:14 }}></i>Téléphone</span>
+                <strong>{e.tel}</strong>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:"0.92rem" }}>
+                <span style={{ color:"var(--text-muted)", display:"flex", alignItems:"center", gap:6 }}><i className="fa-solid fa-calendar-week" style={{ width:14 }}></i>Cours cette semaine</span>
+                <strong>{e.cours} cours</strong>
+              </div>
+            </div>
+            <div style={{ display:"flex", gap:8 }}>
+              <button style={{ ...appStyles.btnSecondary, flex:1, justifyContent:"center", padding:"9px 12px", fontSize:"0.9rem" }}>
+                <i className="fa-solid fa-calendar-days"></i> Planning
+              </button>
+              <button style={{ ...appStyles.btnSecondary, padding:"9px 12px", fontSize:"0.9rem" }}>
+                <i className="fa-solid fa-pen"></i>
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── COMMUNICATION ─────────────────────────────────────────────────────────
+function CommunicationScreen() {
+  const [form, setForm] = React.useState({ destinataire:"tous", objet:"", message:"" });
+  const [sent, setSent] = React.useState(false);
+  const [errors, setErrors] = React.useState({});
+
+  const send = () => {
+    const err = {};
+    if (!form.objet.trim())   err.objet   = "L'objet du message est obligatoire.";
+    if (!form.message.trim()) err.message = "Le message ne peut pas être vide.";
+    if (Object.keys(err).length) { setErrors(err); return; }
+    setSent(true);
+    setForm({ destinataire:"tous", objet:"", message:"" });
+    setTimeout(()=>setSent(false), 4000);
+  };
+
+  return (
+    <div>
+      <PageHeader title="Envoyer un message" />
+      {sent && <AlertBox type="success">Votre message a bien été envoyé à toutes les familles.</AlertBox>}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))", gap:20 }}>
+        <div style={appStyles.card}>
+          <h3 style={appStyles.sectionTitle}>Nouveau message</h3>
+          <FormField label="Envoyer à" required>
+            <select style={appStyles.input} value={form.destinataire} onChange={e=>setForm(p=>({...p,destinataire:e.target.value}))}>
+              <option value="tous">Toutes les familles</option>
+              {GROUPES.map(g=><option key={g.id} value={g.nom}>Groupe : {g.nom}</option>)}
+              {ELEVES.filter(e=>e.statut==="actif").map(e=><option key={e.id} value={e.id}>{e.prenom} {e.nom} (famille)</option>)}
+            </select>
+          </FormField>
+          <FormField label="Objet" required error={errors.objet}>
+            <input style={{ ...appStyles.input, borderColor:errors.objet?"var(--red)":"var(--border)" }}
+                   value={form.objet} onChange={e=>{ setForm(p=>({...p,objet:e.target.value})); setErrors(p=>({...p,objet:""})); }}
+                   placeholder="ex : Fermeture exceptionnelle samedi 10 mai" />
+          </FormField>
+          <FormField label="Message" required error={errors.message}>
+            <textarea style={{ ...appStyles.input, minHeight:120, resize:"vertical", borderColor:errors.message?"var(--red)":"var(--border)" }}
+                      value={form.message} onChange={e=>{ setForm(p=>({...p,message:e.target.value})); setErrors(p=>({...p,message:""})); }}
+                      placeholder="Écrivez votre message ici…" />
+          </FormField>
+          <button style={{ ...appStyles.btnPrimary, width:"100%", justifyContent:"center" }} onClick={send}>
+            <i className="fa-solid fa-paper-plane"></i> Envoyer le message
+          </button>
+        </div>
+        <div style={appStyles.card}>
+          <h3 style={appStyles.sectionTitle}>Messages récents</h3>
+          {[
+            { date:"28 avr.", objet:"Cours annulé — M. Bernard absent",      dest:"Groupe A & B" },
+            { date:"15 avr.", objet:"Rappel : cotisation avril à régler",     dest:"Toutes les familles" },
+            { date:"01 avr.", objet:"Reprise des cours après vacances",       dest:"Toutes les familles" },
+          ].map((m,i) => (
+            <div key={i} style={{ paddingBottom:14, marginBottom:14, borderBottom:"1px solid var(--border)" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8 }}>
+                <div style={{ fontWeight:600, fontSize:"0.95rem" }}>{m.objet}</div>
+                <span style={{ color:"var(--text-muted)", fontSize:"0.82rem", flexShrink:0 }}>{m.date}</span>
+              </div>
+              <div style={{ color:"var(--text-muted)", fontSize:"0.85rem", marginTop:2, display:"flex", alignItems:"center", gap:5 }}>
+                <i className="fa-solid fa-arrow-right" style={{ fontSize:"0.75rem" }}></i>{m.dest}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── NAVIGATION ────────────────────────────────────────────────────────────
+const NAV_ITEMS = [
+  { key:"dashboard",     icon:"house",             label:"Accueil" },
+  { key:"eleves",        icon:"user-graduate",      label:"Élèves" },
+  { key:"groupes",       icon:"users",              label:"Groupes" },
+  { key:"cours",         icon:"book-open",          label:"Cours" },
+  { key:"presences",     icon:"clipboard-check",    label:"Présences" },
+  { key:"finances",      icon:"euro-sign",          label:"Paiements" },
+  { key:"bulletins",     icon:"file-lines",         label:"Bulletins" },
+  { key:"enseignants",   icon:"chalkboard-user",    label:"Enseignants" },
+  { key:"communication", icon:"envelope",           label:"Messages" },
+];
+
+const PAGE_TITLES = {
+  dashboard:"Tableau de bord", eleves:"Élèves", groupes:"Groupes",
+  cours:"Cours & Planning", presences:"Présences", finances:"Paiements",
+  bulletins:"Bulletins", enseignants:"Enseignants", communication:"Messages"
+};
+
+// ─── APP ───────────────────────────────────────────────────────────────────
+function App() {
+  const [user, setUser] = React.useState(null);
+  const [page, setPage] = React.useState("dashboard");
+  const [menuOpen, setMenuOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    const token = localStorage.getItem('admisco_token');
+    if (token) {
+      __authToken = token;
+      api('/auth/me').then(u => setUser(u)).catch(() => { localStorage.removeItem('admisco_token'); __authToken = null; });
+    }
+  }, []);
+
+  const handleLogin = (u) => setUser(u);
+  const handleLogout = () => { setUser(null); localStorage.removeItem('admisco_token'); __authToken = null; };
+
+  const { tweaks, TweaksUI } = useTweaks(/*EDITMODE-BEGIN*/{
+    "compactMode": false
+  }/*EDITMODE-END*/);
+
+  if (!user) return <LoginScreen onLogin={handleLogin} />;
+
+  const renderPage = () => {
+    switch(page) {
+      case "eleves":         return <ElevesScreen user={user} />;
+      case "groupes":        return <GroupesScreen user={user} />;
+      case "cours":          return <CoursScreen user={user} />;
+      case "presences":      return <PresencesScreen user={user} />;
+      case "finances":       return <FinancesScreen user={user} />;
+      case "bulletins":      return <BulletinsScreen user={user} />;
+      case "enseignants":    return <EnseignantsScreen />;
+      case "communication":  return <CommunicationScreen />;
+      default:               return <Dashboard onNav={setPage} />;
+    }
+  };
+
+  return (
+    <>
+      {TweaksUI}
+
+      {/* Mobile header */}
+      <div style={{ display:"none" }} className="mobile-header">
+        <div style={{ background:"var(--navy)", color:"#fff", padding:"14px 20px", display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:100 }}>
+          <span style={{ fontFamily:"Lora, serif", fontWeight:700, display:"flex", alignItems:"center", gap:10 }}>
+            <i className="fa-solid fa-school"></i> Admisco
+          </span>
+          <button onClick={()=>setMenuOpen(!menuOpen)} style={{ background:"none", border:"none", color:"#fff", fontSize:"1.4rem", cursor:"pointer" }}>
+            <i className={`fa-solid fa-${menuOpen?"xmark":"bars"}`}></i>
+          </button>
+        </div>
+        {menuOpen && (
+          <div style={{ position:"fixed", inset:0, zIndex:200, display:"flex" }}>
+            <div style={{ background:"var(--navy)", width:260, display:"flex", flexDirection:"column", overflowY:"auto" }}>
+              <div style={{ padding:"20px 24px", borderBottom:"1px solid rgba(255,255,255,0.12)" }}>
+                <span style={{ fontFamily:"Lora, serif", color:"#fff", fontWeight:700, fontSize:"1.1rem" }}>Navigation</span>
+              </div>
+              {NAV_ITEMS.map(n => (
+                <button key={n.key} style={appStyles.navItem(page===n.key)}
+                        onClick={()=>{ setPage(n.key); setMenuOpen(false); }}>
+                  <i className={`fa-solid fa-${n.icon}`} style={appStyles.navIcon}></i> {n.label}
+                </button>
+              ))}
+            </div>
+            <div style={{ flex:1, background:"rgba(0,0,0,0.4)" }} onClick={()=>setMenuOpen(false)} />
+          </div>
+        )}
+      </div>
+
+      {/* Desktop */}
+      <div style={appStyles.wrap} className="desktop-layout">
+        <aside style={appStyles.sidebar}>
+          <div style={appStyles.sidebarLogo}>
+            <div style={{ width:40, height:40, background:"rgba(255,255,255,0.15)", borderRadius:"var(--radius-sm)", display:"flex", alignItems:"center", justifyContent:"center", marginBottom:10 }}>
+              <i className="fa-solid fa-school" style={{ color:"#fff", fontSize:"1.2rem" }}></i>
+            </div>
+            <div style={appStyles.sidebarLogoTitle}>Admisco</div>
+            <div style={appStyles.sidebarLogoSub}>Mini-École</div>
+          </div>
+          <nav style={appStyles.sidebarNav}>
+            {NAV_ITEMS.map(n => (
+              <button key={n.key} style={appStyles.navItem(page===n.key)} onClick={()=>setPage(n.key)}>
+                <i className={`fa-solid fa-${n.icon}`} style={appStyles.navIcon}></i>
+                {n.label}
+              </button>
+            ))}
+          </nav>
+          <div style={{ padding:"16px 24px", borderTop:"1px solid rgba(255,255,255,0.12)" }}>
+            <div style={{ color:"rgba(255,255,255,0.6)", fontSize:"0.85rem", marginBottom:10 }}>
+              Connecté en tant que<br /><strong style={{ color:"#fff" }}>{user ? (user.prenom + ' ' + user.nom + ' · ' + user.role) : 'Utilisateur'}</strong>
+            </div>
+            <button onClick={handleLogout}
+              style={{ ...appStyles.navItem(false), width:"100%", padding:"10px 0", fontSize:"0.9rem", opacity:0.7 }}>
+              <i className="fa-solid fa-right-from-bracket" style={appStyles.navIcon}></i> Se déconnecter
+            </button>
+          </div>
+        </aside>
+
+        <main style={appStyles.main}>
+          <div style={appStyles.topbar}>
+            <h1 style={appStyles.topbarTitle}>{PAGE_TITLES[page]}</h1>
+            <div style={appStyles.topbarUser}>
+              <div style={{ width:36, height:36, background:"var(--beige-dark)", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, color:"var(--navy)" }}>
+                <i className="fa-solid fa-user" style={{ fontSize:"0.9rem" }}></i>
+              </div>
+              <span>{user ? (user.prenom + ' ' + user.nom) : 'Admin'}</span>
+            </div>
+          </div>
+          <div style={appStyles.content}>{renderPage()}</div>
+        </main>
+      </div>
+    </>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+</body>
+</html>

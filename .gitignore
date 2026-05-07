@@ -1,0 +1,15 @@
+/node_modules
+/database/*.db
+/database/*.db-shm
+/database/*.db-wal
+.env
+.DS_Store
+*.log
+npm-debug.log*
+coverage/
+.nyc_output/
+dist/
+build/
+uploads/
+*.sqlite
+*.sqlite3
