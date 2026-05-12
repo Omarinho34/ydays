@@ -1,6 +1,108 @@
 const { User, Eleve, Groupe, Cours, Enseignant, Presence, Paiement, Note, Communication } = require('../models');
 const { generateToken } = require('../middleware/auth');
 const PDFService = require('../services/pdfService');
+const db = require('../config/database');
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+
+function normalizeEmail(email) {
+    return email ? String(email).trim().toLowerCase() : '';
+}
+
+function isValidEmail(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function generateTemporaryPassword() {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+    const bytes = crypto.randomBytes(12);
+    return Array.from(bytes, b => alphabet[b % alphabet.length]).join('');
+}
+
+function insertUserAccount({ email, password, role, nom, prenom, telephone }) {
+    const saltRounds = parseInt(process.env.BCRYPT_ROUNDS) || 12;
+    const passwordHash = bcrypt.hashSync(password, saltRounds);
+    const result = db.prepare(`
+        INSERT INTO users (email, password_hash, role, nom, prenom, telephone)
+        VALUES (?, ?, ?, ?, ?, ?)
+    `).run(email, passwordHash, role, nom, prenom, telephone || null);
+    return User.findById(result.lastInsertRowid);
+}
+
+const createEnseignantWithOptionalAccount = db.transaction((data) => {
+    const email = normalizeEmail(data.email);
+    let generatedAccount = null;
+    let userId = data.user_id || null;
+
+    if (email) {
+        if (!isValidEmail(email)) {
+            throw new Error('Adresse email invalide.');
+        }
+        if (User.findByEmail(email)) {
+            throw new Error('Un compte utilisateur existe déjà avec cet email.');
+        }
+
+        const password = generateTemporaryPassword();
+        const user = insertUserAccount({
+            email,
+            password,
+            role: 'enseignant',
+            nom: data.nom,
+            prenom: data.prenom,
+            telephone: data.telephone
+        });
+        userId = user.id;
+        generatedAccount = { email: user.email, password, role: user.role };
+    }
+
+    const enseignant = Enseignant.create({ ...data, email: email || null, user_id: userId });
+    return { enseignant, generatedAccount };
+});
+
+const createAccountForExistingEnseignant = db.transaction((enseignant, email) => {
+    if (!isValidEmail(email)) {
+        throw new Error('Adresse email invalide.');
+    }
+    if (User.findByEmail(email)) {
+        throw new Error('Un compte utilisateur existe déjà avec cet email.');
+    }
+
+    const password = generateTemporaryPassword();
+    const user = insertUserAccount({
+        email,
+        password,
+        role: 'enseignant',
+        nom: enseignant.nom,
+        prenom: enseignant.prenom,
+        telephone: enseignant.telephone
+    });
+    const updated = Enseignant.update(enseignant.id, { email, user_id: user.id });
+    return { enseignant: updated, generatedAccount: { email: user.email, password, role: user.role } };
+});
+
+function syncLinkedEnseignantAccount(enseignant, data) {
+    if (!enseignant?.user_id) return;
+    const updates = {};
+    if (data.email !== undefined) {
+        const email = normalizeEmail(data.email);
+        if (email && !isValidEmail(email)) {
+            throw new Error('Adresse email invalide.');
+        }
+        if (email) {
+            const existing = User.findByEmail(email);
+            if (existing && existing.id !== enseignant.user_id) {
+                throw new Error('Un compte utilisateur existe déjà avec cet email.');
+            }
+            updates.email = email;
+        }
+    }
+    if (data.nom !== undefined) updates.nom = data.nom;
+    if (data.prenom !== undefined) updates.prenom = data.prenom;
+    if (data.telephone !== undefined) updates.telephone = data.telephone;
+    if (Object.keys(updates).length > 0) {
+        User.update(enseignant.user_id, updates);
+    }
+}
 
 const AuthController = {
     login(req, res) {
@@ -195,17 +297,37 @@ const EnseignantController = {
 
     create(req, res) {
         try {
-            const ens = Enseignant.create(req.body);
-            res.status(201).json(ens);
+            const { enseignant, generatedAccount } = createEnseignantWithOptionalAccount(req.body);
+            res.status(201).json(generatedAccount ? { ...enseignant, generatedAccount } : enseignant);
         } catch (err) {
             res.status(400).json({ error: err.message });
         }
     },
 
     update(req, res) {
-        const ens = Enseignant.update(req.params.id, req.body);
-        if (!ens) return res.status(404).json({ error: 'Enseignant non trouvé.' });
-        res.json(ens);
+        try {
+            const current = Enseignant.findById(req.params.id);
+            if (!current) return res.status(404).json({ error: 'Enseignant non trouvé.' });
+
+            const email = req.body.email !== undefined ? normalizeEmail(req.body.email) : undefined;
+            let generatedAccount = null;
+
+            if (!current.user_id && email) {
+                const result = createAccountForExistingEnseignant({ ...current, ...req.body }, email);
+                generatedAccount = result.generatedAccount;
+            } else {
+                syncLinkedEnseignantAccount(current, req.body);
+            }
+
+            const ens = Enseignant.update(req.params.id, {
+                ...req.body,
+                email: email !== undefined ? (email || null) : req.body.email
+            });
+            if (!ens) return res.status(404).json({ error: 'Enseignant non trouvé.' });
+            res.json(generatedAccount ? { ...ens, generatedAccount } : ens);
+        } catch (err) {
+            res.status(400).json({ error: err.message });
+        }
     },
 
     delete(req, res) {

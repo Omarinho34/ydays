@@ -344,7 +344,7 @@ function LoginScreen({ onLogin }) {
 }
 
 // ─── DASHBOARD ─────────────────────────────────────────────────────────────
-function Dashboard({ onNav }) {
+function Dashboard({ onNav, user }) {
   const [stats, setStats] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
 
@@ -359,7 +359,7 @@ function Dashboard({ onNav }) {
     { key:"presences",     icon:"clipboard-check",label:"Présences",   desc:"Marquer les présences du jour" },
     { key:"finances",      icon:"euro-sign",      label:"Paiements",   desc:"Cotisations et suivi impayés" },
     { key:"bulletins",     icon:"file-lines",     label:"Bulletins",   desc:"Notes et appréciations" },
-  ];
+  ].filter(m => canAccessPage(user?.role, m.key));
 
   return (
     <div>
@@ -404,9 +404,11 @@ function Dashboard({ onNav }) {
               <div style={{ fontWeight:700, color:"var(--text)" }}>{c.matiere} — {c.groupe}</div>
               <div style={{ color:"var(--text-muted)", fontSize:"0.88rem" }}>{c.enseignant} · {c.salle}</div>
             </div>
-            <button style={{ ...appStyles.btnPrimary, padding:"9px 16px", fontSize:"0.9rem" }} onClick={()=>onNav("presences")}>
-              <i className="fa-solid fa-clipboard-check"></i> Présences
-            </button>
+            {canAccessPage(user?.role, "presences") && (
+              <button style={{ ...appStyles.btnPrimary, padding:"9px 16px", fontSize:"0.9rem" }} onClick={()=>onNav("presences")}>
+                <i className="fa-solid fa-clipboard-check"></i> Présences
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -446,7 +448,8 @@ function ElevesScreen({ user }) {
   const [fiche, setFiche] = React.useState(null);
   const [confirmDelete, setConfirmDelete] = React.useState(null);
   const canEdit = user && (user.role === 'admin' || user.role === 'secretaire');
-  const canDelete = user && (user.role === 'admin' || user.role === 'secretaire');
+  const canDelete = user && user.role === 'admin';
+  const canViewPayments = user && (user.role === 'admin' || user.role === 'secretaire');
 
   React.useEffect(() => {
     setLoading(true);
@@ -502,14 +505,16 @@ function ElevesScreen({ user }) {
         const created = await api('/eleves', { method: 'POST', body: { ...payload, statut: 'actif' } });
         setEleves(prev => [...prev, { id: created.id, nom: created.nom, prenom: created.prenom, ddn: formatDateFR(created.date_naissance), niveau: created.niveau_scolaire || '—', groupe: '—', parent: created.contact_parent_nom || '—', tel: created.contact_parent_telephone || '—', statut: created.statut, paiement: 'À jour' }]);
       } catch (e) {
-        setEleves(prev => [...prev, { id: Date.now(), statut:"actif", paiement:"À jour", groupe:"—", ...form, ddn: form.ddn || '—' }]);
+        alert(e.message || "Erreur lors de la création de l'élève.");
+        return;
       }
     } else if (modal === "edit") {
       try {
         const updated = await api(`/eleves/${form.id}`, { method: 'PUT', body: payload });
         setEleves(prev => prev.map(e => e.id === updated.id ? { ...e, nom: updated.nom, prenom: updated.prenom, ddn: formatDateFR(updated.date_naissance), niveau: updated.niveau_scolaire || '—', parent: updated.contact_parent_nom || '—', tel: updated.contact_parent_telephone || '—' } : e));
       } catch (e) {
-        setEleves(prev => prev.map(e => e.id === form.id ? { ...e, ...form, ddn: form.ddn || '—' } : e));
+        alert(e.message || "Erreur lors de la modification de l'élève.");
+        return;
       }
     }
     setModal(null); setForm({}); setErrors({});
@@ -531,9 +536,11 @@ function ElevesScreen({ user }) {
     <div>
       <PageHeader title={`Élèves inscrits (${filtered.length})`}
         action={
-          <button style={appStyles.btnPrimary} onClick={()=>{ setForm({}); setErrors({}); setModal("add"); }}>
-            <i className="fa-solid fa-plus"></i> Ajouter un élève
-          </button>
+          canEdit && (
+            <button style={appStyles.btnPrimary} onClick={()=>{ setForm({}); setErrors({}); setModal("add"); }}>
+              <i className="fa-solid fa-plus"></i> Ajouter un élève
+            </button>
+          )
         } />
       <SearchBar value={search} onChange={setSearch} placeholder="Rechercher par nom, groupe, niveau…" />
 
@@ -549,7 +556,7 @@ function ElevesScreen({ user }) {
               <th style={appStyles.th}>Niveau</th>
               <th style={appStyles.th}>Groupe</th>
               <th style={appStyles.th}>Parent / Tuteur</th>
-              <th style={appStyles.th}>Paiement</th>
+              {canViewPayments && <th style={appStyles.th}>Paiement</th>}
               <th style={appStyles.th}>Actions</th>
             </tr>
           </thead>
@@ -568,12 +575,14 @@ function ElevesScreen({ user }) {
                   <div>{e.parent}</div>
                   <div style={{ color:"var(--text-muted)", fontSize:"0.85rem" }}>{e.tel}</div>
                 </td>
-                <td style={appStyles.td}>
-                  <span style={appStyles.badge(e.paiement==="À jour"?"green":"red")}>
-                    <i className={`fa-solid fa-${e.paiement==="À jour"?"circle-check":"circle-exclamation"}`}></i>
-                    {e.paiement}
-                  </span>
-                </td>
+                {canViewPayments && (
+                  <td style={appStyles.td}>
+                    <span style={appStyles.badge(e.paiement==="À jour"?"green":"red")}>
+                      <i className={`fa-solid fa-${e.paiement==="À jour"?"circle-check":"circle-exclamation"}`}></i>
+                      {e.paiement}
+                    </span>
+                  </td>
+                )}
                 <td style={appStyles.td}>
                   <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
                     <button style={{ ...appStyles.btnSecondary, padding:"7px 14px", fontSize:"0.88rem" }} onClick={()=>setFiche(e)}>
@@ -673,7 +682,8 @@ function FicheEleve({ eleve: initialEleve, onBack, user, onUpdate, onDelete }) {
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
   const canEdit = user && (user.role === 'admin' || user.role === 'secretaire');
-  const canDelete = user && (user.role === 'admin' || user.role === 'secretaire');
+  const canDelete = user && user.role === 'admin';
+  const canViewPayments = user && (user.role === 'admin' || user.role === 'secretaire');
 
   React.useEffect(() => {
     loadData();
@@ -682,18 +692,18 @@ function FicheEleve({ eleve: initialEleve, onBack, user, onUpdate, onDelete }) {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [eleveData, statsData, presData, paieData, notesData] = await Promise.all([
+      const [eleveData, statsData, presData, notesData, paieData] = await Promise.all([
         api(`/eleves/${initialEleve.id}`),
         api(`/eleves/${initialEleve.id}/stats`),
         api(`/presences?eleve_id=${initialEleve.id}`),
-        api(`/paiements?eleve_id=${initialEleve.id}`),
-        api(`/notes?eleve_id=${initialEleve.id}`)
+        api(`/notes?eleve_id=${initialEleve.id}`),
+        canViewPayments ? api(`/paiements?eleve_id=${initialEleve.id}`) : Promise.resolve([])
       ]);
       setEleve(eleveData);
       setStats(statsData);
       setPresences(Array.isArray(presData) ? presData : []);
-      setPaiements(Array.isArray(paieData) ? paieData : []);
       setNotes(Array.isArray(notesData) ? notesData : []);
+      setPaiements(Array.isArray(paieData) ? paieData : []);
     } catch (e) {
       setEleve({
         id: initialEleve.id, nom: initialEleve.nom, prenom: initialEleve.prenom,
@@ -807,10 +817,12 @@ function FicheEleve({ eleve: initialEleve, onBack, user, onUpdate, onDelete }) {
             <h2 style={{ fontFamily:'Lora, serif', fontSize:'1.6rem', color:'var(--navy)' }}>{eleve.prenom} {eleve.nom}</h2>
             <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginTop:8 }}>
               <span style={appStyles.badge('beige')}><i className="fa-solid fa-book-open"></i> {eleve.niveau_scolaire || '—'}</span>
-              <span style={appStyles.badge(totalPaiements>0?'green':'red')}>
-                <i className={`fa-solid fa-${totalPaiements>0?'circle-check':'circle-exclamation'}`}></i>
-                {totalPaiements>0?`Cotisation à jour (${totalPaiements} €)`:'Cotisation en attente'}
-              </span>
+              {canViewPayments && (
+                <span style={appStyles.badge(totalPaiements>0?'green':'red')}>
+                  <i className={`fa-solid fa-${totalPaiements>0?'circle-check':'circle-exclamation'}`}></i>
+                  {totalPaiements>0?`Cotisation à jour (${totalPaiements} €)`:'Cotisation en attente'}
+                </span>
+              )}
               <span style={appStyles.badge('beige')}><i className="fa-solid fa-chart-pie"></i> Présence {tauxPresence}%</span>
             </div>
           </div>
@@ -897,29 +909,30 @@ function FicheEleve({ eleve: initialEleve, onBack, user, onUpdate, onDelete }) {
           )}
         </div>
 
-        {/* PAIMENTS */}
-        <div style={appStyles.card}>
-          <h3 style={appStyles.sectionTitle}>Paiements</h3>
-          {paiements.length === 0 ? (
-            <AlertBox type="info">Aucun paiement enregistré.</AlertBox>
-          ) : (
-            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-              {paiements.slice(0,5).map(p => (
-                <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:10, borderBottom:'1px solid var(--border)' }}>
-                  <div>
-                    <div style={{ fontWeight:600, fontSize:'0.95rem' }}>{p.formule || 'Paiement'}</div>
-                    <div style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>{formatDateFR(p.date_paiement)} · {p.mode_paiement || '—'}</div>
+        {canViewPayments && (
+          <div style={appStyles.card}>
+            <h3 style={appStyles.sectionTitle}>Paiements</h3>
+            {paiements.length === 0 ? (
+              <AlertBox type="info">Aucun paiement enregistré.</AlertBox>
+            ) : (
+              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                {paiements.slice(0,5).map(p => (
+                  <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:10, borderBottom:'1px solid var(--border)' }}>
+                    <div>
+                      <div style={{ fontWeight:600, fontSize:'0.95rem' }}>{p.formule || 'Paiement'}</div>
+                      <div style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>{formatDateFR(p.date_paiement)} · {p.mode_paiement || '—'}</div>
+                    </div>
+                    <span style={{ fontWeight:700, fontSize:'1.05rem', color:'var(--green)' }}>{p.montant} €</span>
                   </div>
-                  <span style={{ fontWeight:700, fontSize:'1.05rem', color:'var(--green)' }}>{p.montant} €</span>
+                ))}
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingTop:6, borderTop:'2px solid var(--border)', marginTop:4 }}>
+                  <span style={{ fontWeight:600 }}>Total payé</span>
+                  <span style={{ fontWeight:700, fontSize:'1.1rem', color:'var(--navy)' }}>{totalPaiements} €</span>
                 </div>
-              ))}
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingTop:6, borderTop:'2px solid var(--border)', marginTop:4 }}>
-                <span style={{ fontWeight:600 }}>Total payé</span>
-                <span style={{ fontWeight:700, fontSize:'1.1rem', color:'var(--navy)' }}>{totalPaiements} €</span>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {/* NOTES */}
         <div style={appStyles.card}>
@@ -3069,50 +3082,581 @@ function BulletinsScreen({ user }) {
 }
 
 // ─── ENSEIGNANTS ───────────────────────────────────────────────────────────
-function EnseignantsScreen() {
-  const enseignants = [
-    { id:1, nom:"M. Bernard",  matieres:"Mathématiques", tel:"06 11 22 33 44", cours:2 },
-    { id:2, nom:"Mme Dupont",  matieres:"Français",      tel:"07 22 33 44 55", cours:2 },
-    { id:3, nom:"Mme Martin",  matieres:"Anglais",       tel:"06 33 44 55 66", cours:1 },
-  ];
+function parseMatieres(value) {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) return parsed.filter(Boolean);
+  } catch (e) {}
+  return String(value).split(',').map(m => m.trim()).filter(Boolean);
+}
+
+function matieresLabel(value) {
+  const matieres = parseMatieres(value);
+  return matieres.length ? matieres.join(', ') : 'Matières à renseigner';
+}
+
+function matieresFromText(value) {
+  return String(value || '').split(',').map(m => m.trim()).filter(Boolean);
+}
+
+function AccessEnseignantModal({ account, onClose }) {
+  if (!account) return null;
+  const copy = async () => {
+    const text = `Email : ${account.email}\nMot de passe temporaire : ${account.password}`;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (e) {}
+  };
+  return (
+    <Modal title="Accès enseignant créés" onClose={onClose}>
+      <AlertBox type="success">
+        Le compte enseignant a été créé. Notez le mot de passe maintenant : il ne sera plus affiché ensuite.
+      </AlertBox>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:12 }}>
+        <div style={{ display:'flex', flexDirection:'column', gap:4, padding:'12px 14px', background:'var(--beige)', borderRadius:'var(--radius-sm)' }}>
+          <span style={{ color:'var(--text-muted)', fontSize:'0.85rem', display:'flex', alignItems:'center', gap:6 }}>
+            <i className="fa-solid fa-envelope" style={{ width:14 }}></i>Email de connexion
+          </span>
+          <span style={{ fontWeight:700, fontSize:'1rem', overflowWrap:'anywhere' }}>{account.email}</span>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:4, padding:'12px 14px', background:'var(--beige)', borderRadius:'var(--radius-sm)' }}>
+          <span style={{ color:'var(--text-muted)', fontSize:'0.85rem', display:'flex', alignItems:'center', gap:6 }}>
+            <i className="fa-solid fa-key" style={{ width:14 }}></i>Mot de passe temporaire
+          </span>
+          <span style={{ fontWeight:700, fontSize:'1.15rem', fontFamily:'monospace', letterSpacing:0, overflowWrap:'anywhere' }}>{account.password}</span>
+        </div>
+      </div>
+      <div style={{ display:'flex', gap:12, justifyContent:'flex-end', marginTop:20 }}>
+        <button style={appStyles.btnSecondary} onClick={copy}><i className="fa-solid fa-copy"></i> Copier</button>
+        <button style={appStyles.btnPrimary} onClick={onClose}>J'ai noté les accès</button>
+      </div>
+    </Modal>
+  );
+}
+
+function FicheEnseignant({ enseignant: initialEnseignant, user, onBack, onUpdate, onDelete }) {
+  const [loading, setLoading] = React.useState(true);
+  const [enseignant, setEnseignant] = React.useState(null);
+  const [planning, setPlanning] = React.useState([]);
+  const [absences, setAbsences] = React.useState([]);
+  const [editMode, setEditMode] = React.useState(false);
+  const [form, setForm] = React.useState({});
+  const [errors, setErrors] = React.useState({});
+  const [saved, setSaved] = React.useState(false);
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [absenceModal, setAbsenceModal] = React.useState(false);
+  const [absenceForm, setAbsenceForm] = React.useState({});
+  const [absenceErrors, setAbsenceErrors] = React.useState({});
+  const [generatedAccount, setGeneratedAccount] = React.useState(null);
+  const canEdit = user && (user.role === 'admin' || user.role === 'secretaire');
+  const canDelete = user && user.role === 'admin';
+  const jours = ["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"];
+
+  React.useEffect(() => { loadData(); }, [initialEnseignant.id]);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [eData, pData, aData] = await Promise.all([
+        api(`/enseignants/${initialEnseignant.id}`),
+        api(`/enseignants/${initialEnseignant.id}/planning`),
+        api(`/enseignants/${initialEnseignant.id}/absences`)
+      ]);
+      setEnseignant(eData);
+      setPlanning(Array.isArray(pData) ? pData : []);
+      setAbsences(Array.isArray(aData) ? aData : []);
+    } catch (e) {
+      setEnseignant(initialEnseignant);
+      setPlanning([]);
+      setAbsences([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startEdit = () => {
+    setForm({
+      nom: enseignant.nom || '',
+      prenom: enseignant.prenom || '',
+      email: enseignant.email || '',
+      telephone: enseignant.telephone || '',
+      matieres_text: matieresLabel(enseignant.matieres) === 'Matières à renseigner' ? '' : matieresLabel(enseignant.matieres)
+    });
+    setErrors({});
+    setEditMode(true);
+  };
+
+  const validate = () => {
+    const err = {};
+    if (!form.nom?.trim()) err.nom = "Ce champ est obligatoire.";
+    if (!form.prenom?.trim()) err.prenom = "Ce champ est obligatoire.";
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) err.email = "Adresse email invalide.";
+    return err;
+  };
+
+  const handleSave = async () => {
+    const err = validate();
+    if (Object.keys(err).length > 0) { setErrors(err); return; }
+    try {
+      const updated = await api(`/enseignants/${enseignant.id}`, { method:'PUT', body:{
+        nom: form.nom,
+        prenom: form.prenom,
+        email: form.email || null,
+        telephone: form.telephone || null,
+        matieres: matieresFromText(form.matieres_text)
+      }});
+      const { generatedAccount: account, ...updatedEnseignant } = updated;
+      setEnseignant(updatedEnseignant);
+      setEditMode(false);
+      setSaved(true);
+      if (account) setGeneratedAccount(account);
+      setTimeout(()=>setSaved(false), 3000);
+      if (onUpdate) onUpdate(updatedEnseignant);
+    } catch (e) {
+      alert(e.message || "Erreur lors de la sauvegarde.");
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await api(`/enseignants/${enseignant.id}`, { method:'DELETE' });
+      if (onDelete) onDelete(enseignant.id);
+      onBack();
+    } catch (e) {
+      alert(e.message || "Impossible d'archiver cet enseignant.");
+    }
+    setConfirmDelete(false);
+  };
+
+  const validateAbsence = () => {
+    const err = {};
+    if (!absenceForm.date_debut) err.date_debut = "Saisissez la date de début.";
+    if (absenceForm.date_fin && absenceForm.date_debut && absenceForm.date_fin < absenceForm.date_debut) err.date_fin = "La date de fin doit être après la date de début.";
+    return err;
+  };
+
+  const handleAddAbsence = async () => {
+    const err = validateAbsence();
+    if (Object.keys(err).length > 0) { setAbsenceErrors(err); return; }
+    try {
+      const absence = await api(`/enseignants/${enseignant.id}/absences`, { method:'POST', body:{
+        date_debut: absenceForm.date_debut,
+        date_fin: absenceForm.date_fin || null,
+        motif: absenceForm.motif || null
+      }});
+      setAbsences(prev => [absence, ...prev]);
+      setAbsenceModal(false);
+      setAbsenceForm({});
+      setAbsenceErrors({});
+    } catch (e) {
+      alert(e.message || "Impossible d'enregistrer cette absence.");
+    }
+  };
+
+  const formatHeure = (h) => h ? h.slice(0,5) : '—';
+  const recLabel = (r) => ({ ponctuel:'Ponctuel', hebdomadaire:'Hebdomadaire', bimensuel:'Bimensuel', mensuel:'Mensuel' }[r] || r || '—');
+  const planningParJour = jours.map((jour, idx) => planning.filter(c => c.jour_semaine === idx).sort((a,b) => (a.heure_debut||'').localeCompare(b.heure_debut||'')));
+
+  if (loading) {
+    return (
+      <div style={{ textAlign:'center', padding:40 }}>
+        <i className="fa-solid fa-spinner fa-spin" style={{ fontSize:'2rem', color:'var(--navy)' }}></i>
+        <p style={{ marginTop:12, color:'var(--text-muted)' }}>Chargement de la fiche…</p>
+      </div>
+    );
+  }
 
   return (
     <div>
-      <PageHeader title="Enseignants"
-        action={<button style={appStyles.btnPrimary}><i className="fa-solid fa-plus"></i> Ajouter un enseignant</button>} />
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))", gap:16 }}>
-        {enseignants.map(e => (
-          <div key={e.id} style={appStyles.card}>
-            <div style={{ display:"flex", gap:14, alignItems:"center", marginBottom:16 }}>
-              <div style={{ width:52, height:52, borderRadius:"50%", background:"var(--navy)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                <i className="fa-solid fa-chalkboard-user" style={{ fontSize:"1.3rem" }}></i>
-              </div>
-              <div>
-                <div style={{ fontFamily:"Lora, serif", fontWeight:700, fontSize:"1.1rem", color:"var(--navy)" }}>{e.nom}</div>
-                <div style={{ color:"var(--text-muted)", fontSize:"0.88rem" }}>{e.matieres}</div>
-              </div>
-            </div>
-            <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:16 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", fontSize:"0.92rem" }}>
-                <span style={{ color:"var(--text-muted)", display:"flex", alignItems:"center", gap:6 }}><i className="fa-solid fa-phone" style={{ width:14 }}></i>Téléphone</span>
-                <strong>{e.tel}</strong>
-              </div>
-              <div style={{ display:"flex", justifyContent:"space-between", fontSize:"0.92rem" }}>
-                <span style={{ color:"var(--text-muted)", display:"flex", alignItems:"center", gap:6 }}><i className="fa-solid fa-calendar-week" style={{ width:14 }}></i>Cours cette semaine</span>
-                <strong>{e.cours} cours</strong>
-              </div>
-            </div>
-            <div style={{ display:"flex", gap:8 }}>
-              <button style={{ ...appStyles.btnSecondary, flex:1, justifyContent:"center", padding:"9px 12px", fontSize:"0.9rem" }}>
-                <i className="fa-solid fa-calendar-days"></i> Planning
-              </button>
-              <button style={{ ...appStyles.btnSecondary, padding:"9px 12px", fontSize:"0.9rem" }}>
-                <i className="fa-solid fa-pen"></i>
-              </button>
+      <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20, flexWrap:'wrap' }}>
+        <button style={appStyles.btnSecondary} onClick={onBack}>
+          <i className="fa-solid fa-arrow-left"></i> Retour à la liste
+        </button>
+        {canEdit && !editMode && (
+          <button style={appStyles.btnSecondary} onClick={startEdit}>
+            <i className="fa-solid fa-pen"></i> Modifier
+          </button>
+        )}
+        {canDelete && !editMode && (
+          <button style={{ ...appStyles.btnSecondary, borderColor:'var(--red)', color:'var(--red)' }} onClick={()=>setConfirmDelete(true)}>
+            <i className="fa-solid fa-trash"></i> Archiver
+          </button>
+        )}
+      </div>
+
+      {saved && <AlertBox type="success">Modifications enregistrées avec succès.</AlertBox>}
+
+      <div style={appStyles.card}>
+        <div style={{ display:'flex', alignItems:'flex-start', gap:20, flexWrap:'wrap' }}>
+          <div style={{ width:72, height:72, borderRadius:'50%', background:'var(--navy)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', flexShrink:0, fontFamily:'Lora, serif', fontSize:'1.6rem', fontWeight:700 }}>
+            {enseignant.prenom?.[0]}{enseignant.nom?.[0]}
+          </div>
+          <div style={{ flex:1 }}>
+            <h2 style={{ fontFamily:'Lora, serif', fontSize:'1.6rem', color:'var(--navy)' }}>{enseignant.prenom} {enseignant.nom}</h2>
+            <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginTop:8 }}>
+              <span style={appStyles.badge('beige')}><i className="fa-solid fa-book-open"></i> {matieresLabel(enseignant.matieres)}</span>
+              <span style={appStyles.badge('beige')}><i className="fa-solid fa-calendar-week"></i> {planning.length} cours</span>
+              <span style={appStyles.badge('beige')}><i className="fa-solid fa-phone"></i> {enseignant.telephone || 'Téléphone à renseigner'}</span>
+              <span style={appStyles.badge('beige')}><i className="fa-solid fa-envelope"></i> {enseignant.email || enseignant.user_email || 'Email à renseigner'}</span>
             </div>
           </div>
-        ))}
+        </div>
       </div>
+
+      {editMode ? (
+        <div style={appStyles.card}>
+          <h3 style={appStyles.sectionTitle}>Modifier les informations</h3>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+            <FormField label="Nom" required error={errors.nom}>
+              <input style={{ ...appStyles.input, borderColor: errors.nom?'var(--red)':'var(--border)' }} value={form.nom||''} onChange={e=>{ setForm(p=>({...p,nom:e.target.value})); setErrors(p=>({...p,nom:''})); }} />
+            </FormField>
+            <FormField label="Prénom" required error={errors.prenom}>
+              <input style={{ ...appStyles.input, borderColor: errors.prenom?'var(--red)':'var(--border)' }} value={form.prenom||''} onChange={e=>{ setForm(p=>({...p,prenom:e.target.value})); setErrors(p=>({...p,prenom:''})); }} />
+            </FormField>
+          </div>
+          <FormField label="Matières">
+            <input style={appStyles.input} value={form.matieres_text||''} onChange={e=>setForm(p=>({...p,matieres_text:e.target.value}))} placeholder="ex : Mathématiques, Français" />
+          </FormField>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+            <FormField label="Email" error={errors.email} hint={!enseignant.user_id ? "Si vous ajoutez un email, un compte enseignant sera créé automatiquement." : "Cet email sert aussi d'identifiant de connexion."}>
+              <input type="email" style={{ ...appStyles.input, borderColor: errors.email?'var(--red)':'var(--border)' }} value={form.email||''} onChange={e=>{ setForm(p=>({...p,email:e.target.value})); setErrors(p=>({...p,email:''})); }} placeholder="ex : enseignant@email.fr" />
+            </FormField>
+            <FormField label="Téléphone">
+              <input type="tel" style={appStyles.input} value={form.telephone||''} onChange={e=>setForm(p=>({...p,telephone:e.target.value}))} placeholder="ex : 06 12 34 56 78" />
+            </FormField>
+          </div>
+          <div style={{ display:'flex', gap:12, marginTop:20, justifyContent:'flex-end' }}>
+            <button style={appStyles.btnSecondary} onClick={()=>{ setEditMode(false); setErrors({}); }}>Annuler</button>
+            <button style={appStyles.btnPrimary} onClick={handleSave}><i className="fa-solid fa-floppy-disk"></i> Enregistrer</button>
+          </div>
+        </div>
+      ) : (
+        <div style={appStyles.card}>
+          <h3 style={appStyles.sectionTitle}>Informations</h3>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:12 }}>
+            {[ ["Nom", enseignant.nom, "user"], ["Prénom", enseignant.prenom, "user"], ["Matières", matieresLabel(enseignant.matieres), "book-open"], ["Email", enseignant.email || enseignant.user_email || '—', "envelope"], ["Téléphone", enseignant.telephone || '—', "phone"] ].map(([k,v,ico])=>(
+              <div key={k} style={{ display:'flex', flexDirection:'column', gap:4, padding:'10px 14px', background:'var(--beige)', borderRadius:'var(--radius-sm)' }}>
+                <span style={{ color:'var(--text-muted)', fontSize:'0.85rem', display:'flex', alignItems:'center', gap:6 }}>
+                  <i className={`fa-solid fa-${ico}`} style={{ width:14 }}></i>{k}
+                </span>
+                <span style={{ fontWeight:600, fontSize:'1rem' }}>{v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{ ...appStyles.card, marginTop:16 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, flexWrap:'wrap', gap:10 }}>
+          <h3 style={appStyles.sectionTitle}>Planning hebdomadaire</h3>
+          <span style={appStyles.badge('beige')}><i className="fa-solid fa-calendar-week"></i> {planning.length} cours</span>
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:12 }}>
+          {jours.map((jour, idx) => (
+            <div key={jour} style={{ background:'var(--beige)', borderRadius:'var(--radius-sm)', padding:14, minHeight:120 }}>
+              <div style={{ fontFamily:'Lora, serif', fontWeight:700, color:'var(--navy)', marginBottom:10 }}>{jour}</div>
+              {planningParJour[idx].length === 0 ? (
+                <div style={{ color:'var(--text-muted)', fontSize:'0.9rem' }}>Aucun cours</div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                  {planningParJour[idx].map(c => (
+                    <div key={c.id} style={{ background:'var(--white)', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)', padding:10 }}>
+                      <div style={{ fontWeight:700, color:'var(--text)', fontSize:'0.95rem' }}>{c.matiere}</div>
+                      {c.titre && <div style={{ color:'var(--text-muted)', fontSize:'0.85rem', marginTop:2 }}>{c.titre}</div>}
+                      <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:8 }}>
+                        <span style={appStyles.badge('beige')}><i className="fa-solid fa-clock"></i> {formatHeure(c.heure_debut)} – {formatHeure(c.heure_fin)}</span>
+                        <span style={appStyles.badge('beige')}><i className="fa-solid fa-door-open"></i> {c.salle || '—'}</span>
+                        <span style={appStyles.badge('beige')}><i className="fa-solid fa-rotate"></i> {recLabel(c.recurrence)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ ...appStyles.card, marginTop:16 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, flexWrap:'wrap', gap:10 }}>
+          <h3 style={appStyles.sectionTitle}>Absences signalées</h3>
+          {canEdit && (
+            <button style={{ ...appStyles.btnSecondary, padding:'8px 14px', fontSize:'0.9rem' }} onClick={()=>{ setAbsenceForm({ date_debut:new Date().toISOString().split('T')[0] }); setAbsenceErrors({}); setAbsenceModal(true); }}>
+              <i className="fa-solid fa-plus"></i> Ajouter
+            </button>
+          )}
+        </div>
+        {absences.length === 0 ? (
+          <AlertBox type="info">Aucune absence enregistrée pour cet enseignant.</AlertBox>
+        ) : (
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {absences.map(a => (
+              <div key={a.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:10, borderBottom:'1px solid var(--border)', gap:12 }}>
+                <div>
+                  <div style={{ fontWeight:600, fontSize:'0.95rem' }}>{formatDateFR(a.date_debut)}{a.date_fin ? ` – ${formatDateFR(a.date_fin)}` : ''}</div>
+                  <div style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>{a.motif || 'Motif non renseigné'}</div>
+                </div>
+                <span style={appStyles.badge(a.notifie ? 'green' : 'orange')}><i className={`fa-solid fa-${a.notifie ? 'circle-check' : 'bell'}`}></i> {a.notifie ? 'Notifié' : 'À notifier'}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {absenceModal && (
+        <Modal title="Ajouter une absence" onClose={()=>{ setAbsenceModal(false); setAbsenceForm({}); setAbsenceErrors({}); }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+            <FormField label="Date de début" required error={absenceErrors.date_debut}>
+              <input type="date" style={{ ...appStyles.input, borderColor: absenceErrors.date_debut?'var(--red)':'var(--border)' }} value={absenceForm.date_debut||''} onChange={e=>{ setAbsenceForm(p=>({...p,date_debut:e.target.value})); setAbsenceErrors(p=>({...p,date_debut:''})); }} />
+            </FormField>
+            <FormField label="Date de fin" error={absenceErrors.date_fin}>
+              <input type="date" style={{ ...appStyles.input, borderColor: absenceErrors.date_fin?'var(--red)':'var(--border)' }} value={absenceForm.date_fin||''} onChange={e=>{ setAbsenceForm(p=>({...p,date_fin:e.target.value})); setAbsenceErrors(p=>({...p,date_fin:''})); }} />
+            </FormField>
+          </div>
+          <FormField label="Motif">
+            <textarea style={{ ...appStyles.input, resize:'vertical', minHeight:80 }} value={absenceForm.motif||''} onChange={e=>setAbsenceForm(p=>({...p,motif:e.target.value}))} placeholder="ex : Formation, maladie, indisponibilité…" />
+          </FormField>
+          <div style={{ display:'flex', gap:12, justifyContent:'flex-end', marginTop:8 }}>
+            <button style={appStyles.btnSecondary} onClick={()=>{ setAbsenceModal(false); setAbsenceForm({}); setAbsenceErrors({}); }}>Annuler</button>
+            <button style={appStyles.btnPrimary} onClick={handleAddAbsence}><i className="fa-solid fa-floppy-disk"></i> Enregistrer</button>
+          </div>
+        </Modal>
+      )}
+
+      <AccessEnseignantModal account={generatedAccount} onClose={()=>setGeneratedAccount(null)} />
+
+      {confirmDelete && (
+        <Modal title="Confirmer l'archivage" onClose={()=>setConfirmDelete(false)}>
+          <AlertBox type="warning">
+            Voulez-vous vraiment archiver <strong>{enseignant.prenom} {enseignant.nom}</strong> ?
+          </AlertBox>
+          <div style={{ display:'flex', gap:12, justifyContent:'flex-end' }}>
+            <button style={appStyles.btnSecondary} onClick={()=>setConfirmDelete(false)}>Annuler</button>
+            <button style={{ ...appStyles.btnPrimary, background:'var(--red)' }} onClick={handleDelete}>
+              <i className="fa-solid fa-trash"></i> Confirmer l'archivage
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function EnseignantsScreen({ user }) {
+  const [enseignants, setEnseignants] = React.useState([]);
+  const [cours, setCours] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [search, setSearch] = React.useState('');
+  const [modal, setModal] = React.useState(null);
+  const [form, setForm] = React.useState({});
+  const [errors, setErrors] = React.useState({});
+  const [fiche, setFiche] = React.useState(null);
+  const [confirmDelete, setConfirmDelete] = React.useState(null);
+  const [saved, setSaved] = React.useState(false);
+  const [generatedAccount, setGeneratedAccount] = React.useState(null);
+  const canEdit = user && (user.role === 'admin' || user.role === 'secretaire');
+  const canDelete = user && user.role === 'admin';
+
+  React.useEffect(() => { loadData(); }, []);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [eData, cData] = await Promise.all([
+        api('/enseignants'),
+        api('/cours').catch(() => [])
+      ]);
+      setEnseignants(Array.isArray(eData) ? eData : []);
+      setCours(Array.isArray(cData) ? cData : []);
+    } catch (e) {
+      setEnseignants([]);
+      setCours([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const validate = () => {
+    const err = {};
+    if (!form.nom?.trim()) err.nom = "Ce champ est obligatoire.";
+    if (!form.prenom?.trim()) err.prenom = "Ce champ est obligatoire.";
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) err.email = "Adresse email invalide.";
+    return err;
+  };
+
+  const handleSave = async () => {
+    const err = validate();
+    if (Object.keys(err).length > 0) { setErrors(err); return; }
+    try {
+      const payload = {
+        nom: form.nom,
+        prenom: form.prenom,
+        email: form.email || null,
+        telephone: form.telephone || null,
+        matieres: matieresFromText(form.matieres_text)
+      };
+      if (modal === 'add') {
+        const created = await api('/enseignants', { method:'POST', body: payload });
+        const { generatedAccount: account, ...createdEnseignant } = created;
+        setEnseignants(prev => [...prev, createdEnseignant]);
+        if (account) setGeneratedAccount(account);
+      } else {
+        const updated = await api(`/enseignants/${form.id}`, { method:'PUT', body: payload });
+        const { generatedAccount: account, ...updatedEnseignant } = updated;
+        setEnseignants(prev => prev.map(e => e.id === updatedEnseignant.id ? updatedEnseignant : e));
+        if (account) setGeneratedAccount(account);
+      }
+      setSaved(true);
+      setTimeout(()=>setSaved(false), 3000);
+      setModal(null);
+      setForm({});
+      setErrors({});
+    } catch (e) {
+      alert(e.message || "Erreur lors de la sauvegarde.");
+    }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await api(`/enseignants/${id}`, { method:'DELETE' });
+      setEnseignants(prev => prev.filter(e => e.id !== id));
+    } catch (e) {
+      alert(e.message || "Impossible d'archiver cet enseignant.");
+    }
+    setConfirmDelete(null);
+  };
+
+  const openAdd = () => { setForm({}); setErrors({}); setModal('add'); };
+  const openEdit = (e) => {
+    setForm({
+      id: e.id,
+      nom: e.nom || '',
+      prenom: e.prenom || '',
+      email: e.email || '',
+      telephone: e.telephone || '',
+      matieres_text: matieresLabel(e.matieres) === 'Matières à renseigner' ? '' : matieresLabel(e.matieres)
+    });
+    setErrors({});
+    setModal('edit');
+  };
+
+  const coursCount = (id) => cours.filter(c => c.enseignant_id === id).length;
+  const filtered = enseignants.filter(e => {
+    const txt = `${e.nom || ''} ${e.prenom || ''} ${matieresLabel(e.matieres)} ${e.email || ''} ${e.telephone || ''}`.toLowerCase();
+    return txt.includes(search.toLowerCase());
+  });
+
+  if (fiche) {
+    return <FicheEnseignant enseignant={fiche} user={user} onBack={()=>setFiche(null)} onUpdate={(updated)=>setEnseignants(prev=>prev.map(e=>e.id===updated.id?updated:e))} onDelete={(id)=>setEnseignants(prev=>prev.filter(e=>e.id!==id))} />;
+  }
+
+  return (
+    <div>
+      <PageHeader title={`Enseignants (${filtered.length})`}
+        action={canEdit && <button style={appStyles.btnPrimary} onClick={openAdd}><i className="fa-solid fa-plus"></i> Ajouter un enseignant</button>} />
+
+      {saved && <AlertBox type="success">Enseignant enregistré avec succès.</AlertBox>}
+      <SearchBar value={search} onChange={setSearch} placeholder="Rechercher par nom, matière, téléphone…" />
+
+      {loading ? (
+        <div style={{ textAlign:'center', padding:40 }}>
+          <i className="fa-solid fa-spinner fa-spin" style={{ fontSize:'2rem', color:'var(--navy)' }}></i>
+          <p style={{ marginTop:12, color:'var(--text-muted)' }}>Chargement…</p>
+        </div>
+      ) : filtered.length === 0 ? (
+        <AlertBox type="info">Aucun enseignant ne correspond à votre recherche.</AlertBox>
+      ) : (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))", gap:16 }}>
+          {filtered.map(e => (
+            <div key={e.id} style={appStyles.card}>
+              <div style={{ display:"flex", gap:14, alignItems:"center", marginBottom:16 }}>
+                <div style={{ width:52, height:52, borderRadius:"50%", background:"var(--navy)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontFamily:'Lora, serif', fontWeight:700 }}>
+                  {e.prenom?.[0]}{e.nom?.[0]}
+                </div>
+                <div style={{ minWidth:0 }}>
+                  <div style={{ fontFamily:"Lora, serif", fontWeight:700, fontSize:"1.1rem", color:"var(--navy)" }}>{e.prenom} {e.nom}</div>
+                  <div style={{ color:"var(--text-muted)", fontSize:"0.88rem", overflowWrap:'anywhere' }}>{matieresLabel(e.matieres)}</div>
+                </div>
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:16 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", fontSize:"0.92rem", gap:12 }}>
+                  <span style={{ color:"var(--text-muted)", display:"flex", alignItems:"center", gap:6 }}><i className="fa-solid fa-phone" style={{ width:14 }}></i>Téléphone</span>
+                  <strong style={{ textAlign:'right' }}>{e.telephone || '—'}</strong>
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between", fontSize:"0.92rem", gap:12 }}>
+                  <span style={{ color:"var(--text-muted)", display:"flex", alignItems:"center", gap:6 }}><i className="fa-solid fa-envelope" style={{ width:14 }}></i>Email</span>
+                  <strong style={{ textAlign:'right', overflowWrap:'anywhere' }}>{e.email || e.user_email || '—'}</strong>
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between", fontSize:"0.92rem", gap:12 }}>
+                  <span style={{ color:"var(--text-muted)", display:"flex", alignItems:"center", gap:6 }}><i className="fa-solid fa-calendar-week" style={{ width:14 }}></i>Cours cette semaine</span>
+                  <strong>{coursCount(e.id)} cours</strong>
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:8, flexWrap:'wrap' }}>
+                <button style={{ ...appStyles.btnSecondary, flex:1, justifyContent:"center", padding:"9px 12px", fontSize:"0.9rem" }} onClick={()=>setFiche(e)}>
+                  <i className="fa-solid fa-calendar-days"></i> Planning
+                </button>
+                {canEdit && (
+                  <button style={{ ...appStyles.btnSecondary, padding:"9px 12px", fontSize:"0.9rem" }} onClick={()=>openEdit(e)}>
+                    <i className="fa-solid fa-pen"></i>
+                  </button>
+                )}
+                {canDelete && (
+                  <button style={{ padding:"9px 12px", fontSize:"0.9rem", borderRadius:"var(--radius-sm)", border:"2px solid var(--red)", background:"var(--white)", color:"var(--red)", fontWeight:600, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:6 }} onClick={()=>setConfirmDelete(e)}>
+                    <i className="fa-solid fa-trash"></i>
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {modal && (
+        <Modal title={modal === 'add' ? 'Ajouter un enseignant' : 'Modifier l’enseignant'} onClose={()=>{ setModal(null); setForm({}); setErrors({}); }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+            <FormField label="Nom" required error={errors.nom}>
+              <input style={{ ...appStyles.input, borderColor: errors.nom?'var(--red)':'var(--border)' }} value={form.nom||''} onChange={e=>{ setForm(p=>({...p,nom:e.target.value})); setErrors(p=>({...p,nom:''})); }} placeholder="ex : Bernard" />
+            </FormField>
+            <FormField label="Prénom" required error={errors.prenom}>
+              <input style={{ ...appStyles.input, borderColor: errors.prenom?'var(--red)':'var(--border)' }} value={form.prenom||''} onChange={e=>{ setForm(p=>({...p,prenom:e.target.value})); setErrors(p=>({...p,prenom:''})); }} placeholder="ex : Claire" />
+            </FormField>
+          </div>
+          <FormField label="Matières">
+            <input style={appStyles.input} value={form.matieres_text||''} onChange={e=>setForm(p=>({...p,matieres_text:e.target.value}))} placeholder="ex : Mathématiques, Sciences" />
+          </FormField>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+            <FormField label="Email" error={errors.email} hint="Si un email est renseigné, un compte enseignant est créé automatiquement.">
+              <input type="email" style={{ ...appStyles.input, borderColor: errors.email?'var(--red)':'var(--border)' }} value={form.email||''} onChange={e=>{ setForm(p=>({...p,email:e.target.value})); setErrors(p=>({...p,email:''})); }} placeholder="ex : claire@email.fr" />
+            </FormField>
+            <FormField label="Téléphone">
+              <input type="tel" style={appStyles.input} value={form.telephone||''} onChange={e=>setForm(p=>({...p,telephone:e.target.value}))} placeholder="ex : 06 12 34 56 78" />
+            </FormField>
+          </div>
+          <div style={{ display:'flex', gap:12, justifyContent:'flex-end', marginTop:8 }}>
+            <button style={appStyles.btnSecondary} onClick={()=>{ setModal(null); setForm({}); setErrors({}); }}>Annuler</button>
+            <button style={appStyles.btnPrimary} onClick={handleSave}><i className="fa-solid fa-floppy-disk"></i> Enregistrer</button>
+          </div>
+        </Modal>
+      )}
+
+      <AccessEnseignantModal account={generatedAccount} onClose={()=>setGeneratedAccount(null)} />
+
+      {confirmDelete && (
+        <Modal title="Confirmer l'archivage" onClose={()=>setConfirmDelete(null)}>
+          <AlertBox type="warning">
+            Voulez-vous vraiment archiver <strong>{confirmDelete.prenom} {confirmDelete.nom}</strong> ?
+          </AlertBox>
+          <div style={{ display:'flex', gap:12, justifyContent:'flex-end' }}>
+            <button style={appStyles.btnSecondary} onClick={()=>setConfirmDelete(null)}>Annuler</button>
+            <button style={{ ...appStyles.btnPrimary, background:'var(--red)' }} onClick={()=>handleDelete(confirmDelete.id)}>
+              <i className="fa-solid fa-trash"></i> Confirmer l'archivage
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -3203,6 +3747,22 @@ const PAGE_TITLES = {
   bulletins:"Bulletins", enseignants:"Enseignants", communication:"Messages"
 };
 
+function getAllowedPageKeys(role) {
+  if (role === 'enseignant') return ['dashboard', 'eleves', 'cours', 'presences', 'bulletins'];
+  if (role === 'parent') return ['dashboard', 'eleves', 'bulletins', 'communication'];
+  if (role === 'admin' || role === 'secretaire') return NAV_ITEMS.map(n => n.key);
+  return ['dashboard'];
+}
+
+function canAccessPage(role, key) {
+  return getAllowedPageKeys(role).includes(key);
+}
+
+function getNavItemsForRole(role) {
+  const allowed = getAllowedPageKeys(role);
+  return NAV_ITEMS.filter(n => allowed.includes(n.key));
+}
+
 // ─── APP ───────────────────────────────────────────────────────────────────
 function App() {
   const [user, setUser] = React.useState(null);
@@ -3217,8 +3777,12 @@ function App() {
     }
   }, []);
 
+  React.useEffect(() => {
+    if (user && !canAccessPage(user.role, page)) setPage('dashboard');
+  }, [user?.role, page]);
+
   const handleLogin = (u) => setUser(u);
-  const handleLogout = () => { setUser(null); localStorage.removeItem('admisco_token'); __authToken = null; };
+  const handleLogout = () => { setUser(null); setPage('dashboard'); localStorage.removeItem('admisco_token'); __authToken = null; };
 
   const { tweaks, TweaksUI } = useTweaks(/*EDITMODE-BEGIN*/{
     "compactMode": false
@@ -3226,17 +3790,20 @@ function App() {
 
   if (!user) return <LoginScreen onLogin={handleLogin} />;
 
+  const activePage = canAccessPage(user.role, page) ? page : 'dashboard';
+  const visibleNavItems = getNavItemsForRole(user.role);
+
   const renderPage = () => {
-    switch(page) {
+    switch(activePage) {
       case "eleves":         return <ElevesScreen user={user} />;
       case "groupes":        return <GroupesScreen user={user} />;
       case "cours":          return <CoursScreen user={user} />;
       case "presences":      return <PresencesScreen user={user} />;
       case "finances":       return <FinancesScreen user={user} />;
       case "bulletins":      return <BulletinsScreen user={user} />;
-      case "enseignants":    return <EnseignantsScreen />;
+      case "enseignants":    return <EnseignantsScreen user={user} />;
       case "communication":  return <CommunicationScreen />;
-      default:               return <Dashboard onNav={setPage} />;
+      default:               return <Dashboard onNav={setPage} user={user} />;
     }
   };
 
@@ -3260,8 +3827,8 @@ function App() {
               <div style={{ padding:"20px 24px", borderBottom:"1px solid rgba(255,255,255,0.12)" }}>
                 <span style={{ fontFamily:"Lora, serif", color:"#fff", fontWeight:700, fontSize:"1.1rem" }}>Navigation</span>
               </div>
-              {NAV_ITEMS.map(n => (
-                <button key={n.key} style={appStyles.navItem(page===n.key)}
+              {visibleNavItems.map(n => (
+                <button key={n.key} style={appStyles.navItem(activePage===n.key)}
                         onClick={()=>{ setPage(n.key); setMenuOpen(false); }}>
                   <i className={`fa-solid fa-${n.icon}`} style={appStyles.navIcon}></i> {n.label}
                 </button>
@@ -3283,8 +3850,8 @@ function App() {
             <div style={appStyles.sidebarLogoSub}>Mini-École</div>
           </div>
           <nav style={appStyles.sidebarNav}>
-            {NAV_ITEMS.map(n => (
-              <button key={n.key} style={appStyles.navItem(page===n.key)} onClick={()=>setPage(n.key)}>
+            {visibleNavItems.map(n => (
+              <button key={n.key} style={appStyles.navItem(activePage===n.key)} onClick={()=>setPage(n.key)}>
                 <i className={`fa-solid fa-${n.icon}`} style={appStyles.navIcon}></i>
                 {n.label}
               </button>
@@ -3303,7 +3870,7 @@ function App() {
 
         <main style={appStyles.main}>
           <div style={appStyles.topbar}>
-            <h1 style={appStyles.topbarTitle}>{PAGE_TITLES[page]}</h1>
+            <h1 style={appStyles.topbarTitle}>{PAGE_TITLES[activePage]}</h1>
             <div style={appStyles.topbarUser}>
               <div style={{ width:36, height:36, background:"var(--beige-dark)", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, color:"var(--navy)" }}>
                 <i className="fa-solid fa-user" style={{ fontSize:"0.9rem" }}></i>
